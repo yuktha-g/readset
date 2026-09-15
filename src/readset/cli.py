@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import re
 import shutil
@@ -263,6 +264,63 @@ def cmd_doctor(_: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_merge_check(args: argparse.Namespace) -> int:
+    """Validate this checkout against the target branch before merging."""
+    from readset.merge import GitError, default_target, merge_check
+
+    root = Path.cwd()
+    try:
+        root = find_repo_root(root)
+    except NotInRepoError:
+        print("not inside a git repository", file=sys.stderr)
+        return 2
+    into = args.into or default_target(root)
+    cfg = load_config(root)
+    try:
+        report = merge_check(
+            root,
+            into=into,
+            margin=args.margin if args.margin is not None else cfg.hunk_margin,
+            strict=args.strict,
+            diff_max_lines=cfg.diff_max_lines,
+        )
+    except GitError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if args.json:
+        payload = {
+            "into": report.into,
+            "base": report.base,
+            "ok": report.ok,
+            "findings": [dataclasses.asdict(f) for f in report.findings],
+        }
+        print(json.dumps(payload, indent=2))
+        return 0 if report.ok else 1
+    print(paint(f"readset merge-check: HEAD into {into} (base {report.base[:10]})", "bold"))
+    if not report.findings:
+        print(paint("  clean: nothing changed on both sides", "green"))
+        return 0
+    margin = args.margin if args.margin is not None else cfg.hunk_margin
+    for f in report.findings:
+        if f.kind == "overlap":
+            print(paint(f"  {f.path}: BLOCK - both sides edited within {margin} lines", "red"))
+            print(f"      ours {f.ours}  theirs {f.theirs}")
+        elif f.kind == "both_changed":
+            print(paint(f"  {f.path}: note - both sides changed, disjoint regions", "yellow"))
+            print(f"      ours {f.ours}  theirs {f.theirs}")
+        else:
+            mark = "BLOCK" if f.blocking else "note"
+            print(paint(f"  {f.path}: {mark} - you read this file and {into} changed it", "yellow"))
+        if f.diff and (f.blocking or args.verbose):
+            for line in f.diff.rstrip("\n").splitlines():
+                print("      " + line)
+    if report.ok:
+        print(paint("\nsafe to merge; review the notes above", "green"))
+        return 0
+    print(paint("\nnot safe to merge: rebase onto " + into + " and re-run", "red"))
+    return 1
+
+
 def cmd_demo(_: argparse.Namespace) -> int:
     from readset.demo import run
 
@@ -299,6 +357,16 @@ def build_parser() -> argparse.ArgumentParser:
     gc = sub.add_parser("gc", help="end stale transactions and collect blobs")
     gc.add_argument("--older-than", default="24h")
     gc.set_defaults(func=cmd_gc)
+
+    mc = sub.add_parser(
+        "merge-check", help="validate this branch against its target before merging"
+    )
+    mc.add_argument("--into", default=None, help="target branch (default: origin/HEAD or main)")
+    mc.add_argument("--margin", type=int, default=None, help="lines of separation required")
+    mc.add_argument("--strict", action="store_true", help="stale dependencies block too")
+    mc.add_argument("--verbose", action="store_true", help="show diffs for notes as well")
+    mc.add_argument("--json", action="store_true")
+    mc.set_defaults(func=cmd_merge_check)
 
     doctor = sub.add_parser("doctor", help="check the install and print a paste-able report")
     doctor.set_defaults(func=cmd_doctor)

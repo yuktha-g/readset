@@ -318,3 +318,34 @@ and assert fail-open (exit 0, no JSON, error logged).
 - `CHANGELOG.md` (Keep a Changelog), `CONTRIBUTING.md`, `LICENSE` (MIT), `SECURITY.md`.
 - README: problem in two sentences, the demo output, install, how it works (with the
   isolation guarantee stated precisely), limitations, roadmap, prior art and citations.
+
+## Addendum 2026-09-15: worktree merge validation (`readset merge-check`)
+
+**Problem.** Teams isolate agents in git worktrees and only discover collisions as conflict
+markers at merge time. Worse, git merges *adjacent* hunks silently, and it never notices when
+a branch relied on a file the other side changed but the branch did not touch (write skew).
+
+**Command.** `readset merge-check [--into <branch>] [--margin N] [--strict] [--json]`, run
+inside a worktree or branch checkout. Exit 0 when safe, 1 when a conflict is found, 2 on
+usage errors. Library entry point: `readset.merge.merge_check(root, into) -> MergeReport`.
+
+**Algorithm.**
+1. `base = git merge-base HEAD <into>`. `<into>` defaults to `origin/HEAD`'s branch, else `main`.
+2. `ours` = paths that differ between `base` and the working tree (committed or not).
+3. `theirs` = paths that differ between `base` and `<into>`.
+4. `read` = every path in this checkout's ledger read sets and write log (all transactions).
+5. For each path in `theirs`:
+   - in `ours`: compute both sides' changed line ranges in base coordinates
+     (`hunks.changed_ranges`); any pair within `margin` lines is an **overlap conflict**.
+     Disjoint ranges are a **both-changed notice** (git will merge them; review).
+   - not in `ours` but in `read`: a **stale dependency** notice, or a conflict with `--strict`.
+   - otherwise ignored.
+6. Report per path with kind, both ranges, and their diff (capped by `diff_max_lines`).
+
+**Why the base snapshot is the read snapshot.** A worktree created from `base` observed
+every file at `base`; that is exactly a read set with `base` as the content. The ledger adds
+the files the agent actually looked at, which is what makes the stale-dependency notice possible.
+
+**Out of scope.** Rewriting the merge, three-way content merging, and hooking `git merge`
+itself. `merge-check` is a gate a human or CI runs before merging; a git `pre-merge-commit`
+hook can call it.

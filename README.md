@@ -154,6 +154,33 @@ window is surfaced to the agent rather than enforced. readset does not provide f
 serialisability in any scope; two agents can still write-skew across regions that each read
 but neither wrote. That is the same trade PostgreSQL makes at `REPEATABLE READ`.
 
+## Worktrees: `readset merge-check`
+
+If you isolate agents in git worktrees, collisions move to merge time, and git only catches
+the textual ones. Run this in a worktree or branch checkout before merging:
+
+```
+$ readset merge-check --into main
+readset merge-check: HEAD into main (base 00c27bb78a)
+  billing.py: BLOCK - both sides edited within 3 lines
+      ours [(9, 9)]  theirs [(1, 1), (5, 5), (8, 8)]
+      --- billing.py (merge base)
+      +++ billing.py (main)
+      ...
+      -def invoice(items):
+      +def invoice(items, discount=0):
+           return sum(total(i) for i in items)
+  config.py: note - you read this file and main changed it
+
+not safe to merge: rebase onto main and re-run
+```
+
+The branch's merge base is its read snapshot. For every file the target branch changed
+since then: if this checkout also changed it, both sides' hunks are compared and anything
+within `hunk_margin` lines **blocks** (git would merge line 8 and line 9 above without a
+word). If this checkout only *read* it (per the ledger), you get a stale-dependency note,
+or a block with `--strict`. Exit code 1 means don't merge. `--json` for CI.
+
 ## Why not just locks?
 
 Locks block *before* work. Agents that hold locks while thinking serialise everything and
@@ -198,6 +225,7 @@ readset uninstall [--agent ...] [--user]         remove exactly the hooks init a
 readset status                                   live transactions and their read sets
 readset log [--limit N] [--json]                 conflicts caught, with diffs
 readset doctor                                   check the install; paste its output into a bug report
+readset merge-check [--into B] [--strict] [--json] validate a worktree/branch against B before merging
 readset gc [--older-than 24h]                    end stale transactions, free storage
 readset demo                                     the collision above, offline
 ```
@@ -237,8 +265,8 @@ accounted for. The test runs in CI on every push.
 
 - **Hunk-level applies to string-replacement edits.** A `Write` that replaces a whole file
   needs a fresh read if anything in it changed; there is no three-way merge.
-- **Same working directory only.** Agents in separate git worktrees are not validated
-  against each other until merge, and readset does not yet hook the merge.
+- **Worktrees are validated at merge time, not live.** `merge-check` is a gate you (or CI)
+  run; readset does not yet hook `git merge` itself.
 - **Bash is a heuristic.** Edits made with `sed`, `python -c`, or any shell command are
   detected only if the file path appears in the command string. Another agent's shell
   edits are still caught, because validation compares against disk, not against ledgers.
@@ -251,7 +279,7 @@ accounted for. The test runs in CI on every push.
 
 ## Roadmap
 
-- Worktree merge validation
+- A `pre-merge-commit` git hook that runs `merge-check` automatically
 - Adapters: Cursor (observe-only until it has a blocking before-edit hook), LangGraph, CrewAI
 - Optional auto-merge when hunks don't overlap, off by default
 

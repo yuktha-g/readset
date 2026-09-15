@@ -28,6 +28,8 @@ All notable changes to this project are documented here. The format follows
 - CLI: `init`, `uninstall`, `status`, `log`, `gc`, `demo`, `hook`.
 - Claude Code plugin manifest: `claude plugin install readset@readset`, runs from source,
   auto-initialises the ledger at the git root via `.git/info/exclude`.
+- `readset merge-check`: validate a worktree or branch against its target before merging,
+  with hunk-level overlap blocking and stale-dependency notes from the ledger.
 - `readset doctor` for install diagnosis; `readset log --json`; bounded `errors.log` with
   event context per entry.
 - Offline demo that needs no LLM.
