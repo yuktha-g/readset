@@ -74,3 +74,17 @@ def test_should_route_to_codex_adapter_when_agent_flag_given(repo: Path) -> None
     )
     assert r.returncode == 0
     assert "a.py" in Ledger.open(repo).begin("cx").read_set()
+
+
+def test_should_run_plugin_hook_script_from_source_when_python_present(repo: Path) -> None:
+    script = Path(__file__).resolve().parents[2] / "hooks" / "readset-hook"
+    payload = {"session_id": "plug", "hook_event_name": "SessionStart", "cwd": str(repo)}
+    r = subprocess.run(
+        [str(script), "--auto-init"],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stderr
+    assert (repo / ".readset" / "ledger.db").exists()

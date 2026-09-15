@@ -280,3 +280,31 @@ def test_should_keep_view_after_hunk_allowed_edit_recorded(repo: Path) -> None:
     )
     view_hash = ledger.begin("sess-1").read_set()["f.py"]
     assert ledger.load_blob(view_hash) == ten.replace("line9\n", "x\n").encode()
+
+
+def test_should_auto_init_at_git_root_when_session_starts_in_plugin_mode(repo: Path) -> None:
+    sub = repo / "pkg"
+    sub.mkdir()
+    payload = _payload(sub, "SessionStart")
+    assert dispatch(payload, auto_init=True).action == "begin"
+    assert (repo / ".readset" / "ledger.db").exists()
+    assert ".readset/" in (repo / ".git" / "info" / "exclude").read_text()
+    assert not (repo / ".gitignore").exists()
+
+
+def test_should_not_auto_init_when_not_a_git_repo(tmp_path: Path) -> None:
+    payload = _payload(tmp_path, "SessionStart")
+    assert dispatch(payload, auto_init=True).action == "noop"
+    assert not (tmp_path / ".readset").exists()
+
+
+def test_should_not_auto_init_on_other_events(repo: Path) -> None:
+    payload = _payload(repo, "PostToolUse", "Read", file_path="a.py")
+    assert dispatch(payload, auto_init=True).action == "noop"
+    assert not (repo / ".readset").exists()
+
+
+def test_should_pass_auto_init_through_main(repo: Path) -> None:
+    out = io.StringIO()
+    assert main(io.StringIO(json.dumps(_payload(repo, "SessionStart"))), out, auto_init=True) == 0
+    assert (repo / ".readset").exists()

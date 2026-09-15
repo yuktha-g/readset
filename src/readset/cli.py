@@ -199,6 +199,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     hook = sub.add_parser("hook", help="hook entry point; reads an agent's payload on stdin")
     hook.add_argument("--agent", choices=AGENTS, default="claude")
+    hook.add_argument(
+        "--auto-init",
+        action="store_true",
+        help="on SessionStart, create the ledger at the git root if missing (plugin mode)",
+    )
     return parser
 
 
@@ -208,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "hook":
         if args.agent == "codex":
             return codex.main(sys.stdin, sys.stdout)
-        return claude_code.main(sys.stdin, sys.stdout)
+        return claude_code.main(sys.stdin, sys.stdout, auto_init=args.auto_init)
     if args.command is None:
         parser.print_help()
         return 0

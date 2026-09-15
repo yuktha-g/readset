@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from readset.install import (
+    ensure_git_exclude,
     ensure_gitignore,
     hook_config,
     install_hooks,
@@ -124,3 +125,13 @@ def test_should_place_settings_per_agent_when_asked(tmp_path: Path) -> None:
     assert settings_file("claude", tmp_path, user=False) == tmp_path / ".claude" / "settings.json"
     assert settings_file("codex", tmp_path, user=False) == tmp_path / ".codex" / "hooks.json"
     assert settings_file("codex", tmp_path, user=True) == Path.home() / ".codex" / "hooks.json"
+
+
+def test_should_write_git_exclude_when_repo_has_git_dir(repo: Path) -> None:
+    assert ensure_git_exclude(repo) is True
+    assert (repo / ".git" / "info" / "exclude").read_text() == ".readset/\n"
+    assert ensure_git_exclude(repo) is False
+
+
+def test_should_skip_git_exclude_when_no_git_dir(tmp_path: Path) -> None:
+    assert ensure_git_exclude(tmp_path) is False

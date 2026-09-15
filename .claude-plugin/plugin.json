@@ -1,0 +1,12 @@
+{
+  "name": "readset",
+  "description": "Snapshot isolation for AI agents: stops parallel Claude Code sessions and subagents from silently overwriting each other's edits.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Yuktha G"
+  },
+  "homepage": "https://github.com/yuktha/readset",
+  "repository": "https://github.com/yuktha/readset",
+  "license": "MIT",
+  "keywords": ["concurrency", "parallel-agents", "hooks", "safety", "optimistic-concurrency-control"]
+}

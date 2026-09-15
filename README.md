@@ -59,6 +59,20 @@ through. No merge, no lock, no human in the loop.
 
 ## Install
 
+**As a Claude Code plugin (zero setup):**
+
+```
+claude plugin marketplace add yuktha/readset
+claude plugin install readset@readset
+```
+
+That's the whole install. The plugin runs readset from its own source with any
+`python3 >= 3.10` (no dependencies, nothing to pip install), and initialises a ledger at
+the git root of any repository you open, excluded via `.git/info/exclude` so nothing you
+commit changes.
+
+**As a CLI (per repo, explicit):**
+
 ```
 uv tool install readset        # or: pipx install readset
 cd your-repo
@@ -230,7 +244,6 @@ accounted for. The test runs in CI on every push.
 
 - Worktree merge validation
 - Adapters: Cursor (observe-only until it has a blocking before-edit hook), LangGraph, CrewAI
-- A Claude Code plugin manifest so install is one `claude plugin install`
 - Optional auto-merge when hunks don't overlap, off by default
 
 ## Safety

@@ -152,3 +152,21 @@ def ensure_gitignore(root: Path) -> bool:
     prefix = "" if not existing or existing.endswith("\n") else "\n"
     gitignore.write_text(existing + prefix + GITIGNORE_LINE + "\n")
     return True
+
+
+def ensure_git_exclude(root: Path) -> bool:
+    """Add .readset/ to .git/info/exclude (local, never committed). Returns True if changed.
+
+    Used by the plugin's auto-init so opening a repo never modifies a tracked file.
+    """
+    git_dir = root / ".git"
+    if not git_dir.is_dir():
+        return False
+    exclude = git_dir / "info" / "exclude"
+    existing = exclude.read_text() if exclude.exists() else ""
+    if GITIGNORE_LINE in existing.splitlines():
+        return False
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    prefix = "" if not existing or existing.endswith("\n") else "\n"
+    exclude.write_text(existing + prefix + GITIGNORE_LINE + "\n")
+    return True

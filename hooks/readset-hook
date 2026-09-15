@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Plugin entry point. Runs readset from the plugin's own source tree, which needs
+# nothing but python3 >= 3.10 because readset has no dependencies. Fail-open: if no
+# usable interpreter is found, exit 0 so the agent's tool call proceeds.
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root="$(dirname "$here")"
+
+for py in python3 python; do
+  if command -v "$py" >/dev/null 2>&1; then
+    if "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+      PYTHONPATH="$root/src${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -m readset.cli hook "$@"
+    fi
+  fi
+done
+
+if command -v readset >/dev/null 2>&1; then
+  exec readset hook "$@"
+fi
+
+exit 0

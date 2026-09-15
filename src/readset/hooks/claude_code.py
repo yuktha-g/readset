@@ -15,10 +15,11 @@ from pathlib import Path
 from typing import IO, Any
 
 from readset.config import load as load_config
-from readset.errors import OutsideRepoError
+from readset.errors import NotInRepoError, OutsideRepoError
 from readset.hooks._runner import HookResult, allow, deny, run
+from readset.install import ensure_git_exclude
 from readset.ledger import Ledger
-from readset.paths import find_ledger_root, is_ignored, relative_path
+from readset.paths import find_ledger_root, find_repo_root, is_ignored, relative_path
 from readset.txn import Conflict
 
 READ_TOOLS = frozenset({"Read"})
@@ -28,9 +29,17 @@ PATH_FIELDS = ("file_path", "notebook_path")
 __all__ = ["HookResult", "dispatch", "main"]
 
 
-def dispatch(payload: dict[str, Any]) -> HookResult:
-    """Handle one hook payload. Raises on internal errors; `main` catches them."""
-    root = find_ledger_root(Path(str(payload.get("cwd", "."))))
+def dispatch(payload: dict[str, Any], *, auto_init: bool = False) -> HookResult:
+    """Handle one hook payload. Raises on internal errors; `main` catches them.
+
+    With `auto_init`, a SessionStart inside a git repository that has no ledger creates
+    one at the git root and excludes it via .git/info/exclude. The plugin uses this so
+    installing it is the only setup step.
+    """
+    cwd = Path(str(payload.get("cwd", ".")))
+    root = find_ledger_root(cwd)
+    if root is None and auto_init and payload.get("hook_event_name") == "SessionStart":
+        root = _auto_init(cwd)
     if root is None:
         return HookResult()
     event = str(payload.get("hook_event_name", ""))
@@ -134,6 +143,18 @@ def _edits(tool: str, tool_input: dict[str, Any]) -> tuple[list[tuple[str, str]]
     return None, False
 
 
+def _auto_init(cwd: Path) -> Path | None:
+    try:
+        root = find_repo_root(cwd)
+    except NotInRepoError:
+        return None
+    if not (root / ".git").exists():
+        return None
+    Ledger.open(root)
+    ensure_git_exclude(root)
+    return root
+
+
 def _relative(root: Path, tool_input: dict[str, Any]) -> str | None:
     for field in PATH_FIELDS:
         raw = tool_input.get(field)
@@ -145,6 +166,6 @@ def _relative(root: Path, tool_input: dict[str, Any]) -> str | None:
     return None
 
 
-def main(stdin: IO[str], stdout: IO[str]) -> int:
+def main(stdin: IO[str], stdout: IO[str], *, auto_init: bool = False) -> int:
     """Fail-open entry point used by `readset hook`. Always returns 0."""
-    return run(dispatch, stdin, stdout)
+    return run(lambda payload: dispatch(payload, auto_init=auto_init), stdin, stdout)

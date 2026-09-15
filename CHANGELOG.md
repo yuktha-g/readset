@@ -26,5 +26,7 @@ All notable changes to this project are documented here. The format follows
 - Multi-process contention test (16 workers, 3,200 ops) and a fix for a blob-store race it
   found.
 - CLI: `init`, `uninstall`, `status`, `log`, `gc`, `demo`, `hook`.
+- Claude Code plugin manifest: `claude plugin install readset@readset`, runs from source,
+  auto-initialises the ledger at the git root via `.git/info/exclude`.
 - Offline demo that needs no LLM.
 - Zero runtime dependencies.
