@@ -160,3 +160,10 @@ def test_should_install_codex_hooks_when_agent_all(
     assert main(["uninstall", "--agent", "codex"]) == 0
     assert json.loads((repo / ".codex" / "hooks.json").read_text()).get("hooks", {}) == {}
     assert "PreToolUse" in json.loads((repo / ".claude" / "settings.json").read_text())["hooks"]
+
+
+def test_should_shorten_uuid_ids_when_displaying() -> None:
+    from readset.cli import _short
+
+    assert _short("3ebbb534-35fd-4aaf-aa41-83512a6b6f63") == "3ebbb534"
+    assert _short("agent-a") == "agent-a"

@@ -21,6 +21,10 @@ All notable changes to this project are documented here. The format follows
 - Subagent transactions fold their writes into the parent's read set when they end.
 - Bash heuristic: read-set paths named in a `Bash` command are refreshed as own writes.
 - Claude Code adapter via hooks, fail-open, with `agent_id` / `session_id` identity.
+- Codex CLI adapter: `apply_patch` parsed into per-file edits, reads inferred from shell
+  commands, `readset init --agent codex`.
+- Multi-process contention test (16 workers, 3,200 ops) and a fix for a blob-store race it
+  found.
 - CLI: `init`, `uninstall`, `status`, `log`, `gc`, `demo`, `hook`.
 - Offline demo that needs no LLM.
 - Zero runtime dependencies.

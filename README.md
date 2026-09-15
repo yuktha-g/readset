@@ -3,7 +3,7 @@
 **Snapshot isolation for AI agents.** readset stops parallel coding agents from silently
 overwriting each other, by validating every write against what the agent actually read.
 
-Zero dependencies. No daemon. One command to install. Works with Claude Code today.
+Zero dependencies. No daemon. One command to install. Works with Claude Code today; Codex CLI adapter included.
 
 ## The problem
 
@@ -69,6 +69,12 @@ readset init
 `.claude/settings.json` for this project. Use `--user` to install into
 `~/.claude/settings.json` instead, so every repo you open is covered. `readset uninstall`
 removes exactly what `init` added and leaves your other hooks alone.
+
+For Codex CLI: `readset init --agent codex` writes `.codex/hooks.json` (or
+`--agent all` for both). Codex has no Read tool, so readset treats any existing repo file
+named in a shell command as read, and parses each `apply_patch` into per-file edits so
+hunk-level validation applies. The Codex adapter is tested against the documented payloads
+but has not yet been run against a live Codex install; reports welcome.
 
 That's it. Open a second Claude Code session on the same repo and have both edit the same
 file. One of them will be stopped with a diff.
@@ -158,13 +164,15 @@ txn.end()
 
 `Transaction` has exactly four calls that matter: `record_read`, `validate_write`,
 `record_write`, `end`. An adapter for another agent framework is a mapping from that
-framework's events onto those four; the Claude Code adapter is under 150 lines.
+framework's events onto those four; the Claude Code adapter is about 130 lines and the
+Codex one about 150, including its patch parser.
 
 ## CLI
 
 ```
-readset init [--scope hunk|strict|target] [--user]  initialise this repo, install hooks
-readset uninstall [--user]                       remove exactly the hooks init added
+readset init [--scope hunk|strict|target] [--agent claude|codex|all] [--user]
+                                                 initialise this repo, install hooks
+readset uninstall [--agent ...] [--user]         remove exactly the hooks init added
 readset status                                   live transactions and their read sets
 readset log [--limit N]                          conflicts caught, with diffs
 readset gc [--older-than 24h]                    end stale transactions, free storage
@@ -211,13 +219,18 @@ accounted for. The test runs in CI on every push.
 - **Bash is a heuristic.** Edits made with `sed`, `python -c`, or any shell command are
   detected only if the file path appears in the command string. Another agent's shell
   edits are still caught, because validation compares against disk, not against ledgers.
-- **Claude Code only.** The core is framework-agnostic; only one adapter exists so far.
+- **Codex adapter is untested against a live install.** Its payload handling follows the
+  published hooks reference and is unit-tested; a real-session check is the next step.
+- **Codex reads are inferred from shell commands.** A file read through a command that does
+  not name it (a script, a glob) is not in the read set, and a later edit to it is treated as
+  a blind overwrite until it is read by name.
 - `Grep` and `Glob` results are not recorded as reads.
 
 ## Roadmap
 
 - Worktree merge validation
-- Adapters: Codex CLI, Cursor, LangGraph, CrewAI
+- Adapters: Cursor (observe-only until it has a blocking before-edit hook), LangGraph, CrewAI
+- A Claude Code plugin manifest so install is one `claude plugin install`
 - Optional auto-merge when hunks don't overlap, off by default
 
 ## Safety

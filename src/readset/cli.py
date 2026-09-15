@@ -49,6 +49,11 @@ def _agents(choice: str) -> list[Agent]:
     return list(AGENTS) if choice == "all" else [choice]  # type: ignore[list-item]
 
 
+def _short(txn_id: str) -> str:
+    """Shorten UUID-like ids for display; leave human-chosen ids alone."""
+    return txn_id[:8] if len(txn_id) >= 32 and "-" in txn_id else txn_id
+
+
 def _repo_root() -> Path:
     try:
         return find_repo_root(Path.cwd())
@@ -105,7 +110,8 @@ def cmd_status(_: argparse.Namespace) -> int:
         return 0
     now = ledger.now()
     for info in live:
-        label = info.txn_id if not info.agent_type else f"{info.txn_id} ({info.agent_type})"
+        short = _short(info.txn_id)
+        label = short if not info.agent_type else f"{short} ({info.agent_type})"
         print(paint(label, "bold"), f"{info.kind}, started {human_age(now - info.started_at)}")
         for path, digest in ledger.begin(info.txn_id).read_set().items():
             print(f"  {path}  {digest[:12]}")
@@ -126,11 +132,11 @@ def cmd_log(args: argparse.Namespace) -> int:
     now = ledger.now()
     for row in rows:
         head = (
-            f"{row['path']}  {row['kind']}  txn {row['txn_id']}"
+            f"{row['path']}  {row['kind']}  txn {_short(row['txn_id'])}"
             f"  {human_age(now - row['detected_at'])}"
         )
         if row["changed_by"]:
-            head += f"  changed by {row['changed_by']}"
+            head += f"  changed by {_short(row['changed_by'])}"
         print(paint(head, "yellow"))
         if row["diff"]:
             print(row["diff"].rstrip("\n"))
