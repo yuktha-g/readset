@@ -89,14 +89,27 @@ def dispatch(payload: dict[str, Any]) -> HookResult:
         return HookResult()
 
     if event == "PreToolUse" and tool in WRITE_TOOLS:
+        edits, replace_all = _edits(tool, tool_input)
         result = txn.validate_write(
             rel,
             scope=config.scope,
+            edits=edits,
+            replace_all=replace_all,
+            hunk_margin=config.hunk_margin,
             tool_use_id=tool_use_id,
             diff_max_lines=config.diff_max_lines,
         )
         if not isinstance(result, Conflict):
-            return HookResult(action="allow")
+            if not result.notice:
+                return HookResult(action="allow")
+            body = {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "allow",
+                    "additionalContext": result.notice,
+                }
+            }
+            return HookResult(stdout=json.dumps(body), action="allow+notice")
         body = {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
@@ -111,10 +124,40 @@ def dispatch(payload: dict[str, Any]) -> HookResult:
         return HookResult(action="read")
 
     if event == "PostToolUse" and tool in WRITE_TOOLS:
-        txn.record_write(rel, tool_use_id=tool_use_id)
+        edits, replace_all = _edits(tool, tool_input)
+        txn.record_write(rel, edits=None if replace_all else edits, tool_use_id=tool_use_id)
         return HookResult(action="write")
 
     return HookResult()
+
+
+def _edits(tool: str, tool_input: dict[str, Any]) -> tuple[list[tuple[str, str]] | None, bool]:
+    """Extract (old, new) string replacements from Edit / MultiEdit input.
+
+    Returns (None, False) for tools that replace the whole file (Write, NotebookEdit),
+    so hunk-level validation does not apply to them.
+    """
+    if tool == "Edit":
+        old, new = tool_input.get("old_string"), tool_input.get("new_string")
+        if isinstance(old, str) and isinstance(new, str):
+            return [(old, new)], bool(tool_input.get("replace_all", False))
+        return None, False
+    if tool == "MultiEdit":
+        raw = tool_input.get("edits")
+        if not isinstance(raw, list):
+            return None, False
+        edits: list[tuple[str, str]] = []
+        replace_all = False
+        for item in raw:
+            if not isinstance(item, dict):
+                return None, False
+            old, new = item.get("old_string"), item.get("new_string")
+            if not (isinstance(old, str) and isinstance(new, str)):
+                return None, False
+            edits.append((old, new))
+            replace_all = replace_all or bool(item.get("replace_all", False))
+        return edits, replace_all
+    return None, False
 
 
 def _relative(root: Path, tool_input: dict[str, Any]) -> str | None:

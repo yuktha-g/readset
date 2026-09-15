@@ -13,9 +13,9 @@ def test_should_initialise_repo_when_init_runs(
     repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(repo)
-    assert main(["init", "--scope", "target"]) == 0
+    assert main(["init", "--scope", "strict"]) == 0
     assert (repo / ".readset" / "ledger.db").exists()
-    assert json.loads((repo / ".readset" / "config.json").read_text())["scope"] == "target"
+    assert json.loads((repo / ".readset" / "config.json").read_text())["scope"] == "strict"
     settings = json.loads((repo / ".claude" / "settings.json").read_text())
     assert "PreToolUse" in settings["hooks"]
     command = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]

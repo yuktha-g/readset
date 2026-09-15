@@ -13,8 +13,11 @@ All notable changes to this project are documented here. The format follows
 - Transaction core: per-agent read sets, write validation against disk, blind-overwrite
   detection, stale-read detection with a real diff, attribution of the change to the
   transaction that made it.
-- Two validation scopes: `readset` (default, validates the whole read set on every write)
-  and `target` (validates only the file being written).
+- Three validation scopes: `hunk` (default: an edit is blocked only if it overlaps a change
+  the agent has not seen; other staleness is injected as context), `strict` (any stale entry
+  in the read set blocks) and `target` (only the written file, as a whole).
+- A transaction's view after an allowed edit is what it read plus its own edits, never
+  the disk, so unseen changes stay protected.
 - Subagent transactions fold their writes into the parent's read set when they end.
 - Bash heuristic: read-set paths named in a `Bash` command are refreshed as own writes.
 - Claude Code adapter via hooks, fail-open, with `agent_id` / `session_id` identity.

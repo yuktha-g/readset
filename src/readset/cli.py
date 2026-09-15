@@ -157,7 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     init = sub.add_parser("init", help="initialise this repo and install Claude Code hooks")
-    init.add_argument("--scope", choices=["readset", "target"], default="readset")
+    init.add_argument("--scope", choices=["strict", "hunk", "target"], default="hunk")
     init.add_argument(
         "--user", action="store_true", help="install hooks in ~/.claude/settings.json"
     )

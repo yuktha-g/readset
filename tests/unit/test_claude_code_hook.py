@@ -195,3 +195,88 @@ def test_should_write_deny_json_to_stdout_when_main_blocks(repo: Path) -> None:
     payload = _payload(repo, "PreToolUse", "Edit", file_path="a.py")
     assert main(io.StringIO(json.dumps(payload)), out) == 0
     assert json.loads(out.getvalue())["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_should_allow_with_context_when_edit_region_is_clear(repo: Path) -> None:
+    _init(repo)
+    ten = "".join(f"line{i}\n" for i in range(1, 11))
+    (repo / "f.py").write_text(ten)
+    dispatch(_payload(repo, "PostToolUse", "Read", file_path="f.py"))
+    (repo / "f.py").write_text(ten.replace("line1\n", "LINE1\n"))
+    r = dispatch(
+        _payload(
+            repo, "PreToolUse", "Edit", file_path="f.py", old_string="line9\n", new_string="x\n"
+        )
+    )
+    assert r.action == "allow+notice"
+    out = json.loads(r.stdout)["hookSpecificOutput"]
+    assert out["permissionDecision"] == "allow"
+    assert "heads-up" in out["additionalContext"]
+
+
+def test_should_deny_when_edit_region_overlaps_other_change(repo: Path) -> None:
+    _init(repo)
+    ten = "".join(f"line{i}\n" for i in range(1, 11))
+    (repo / "f.py").write_text(ten)
+    dispatch(_payload(repo, "PostToolUse", "Read", file_path="f.py"))
+    (repo / "f.py").write_text(ten.replace("line5\n", "FIVE\n"))
+    r = dispatch(
+        _payload(
+            repo, "PreToolUse", "Edit", file_path="f.py", old_string="line5\n", new_string="x\n"
+        )
+    )
+    assert r.action == "deny"
+    assert "region you are editing" in r.stdout
+
+
+def test_should_handle_multiedit_when_edits_listed(repo: Path) -> None:
+    _init(repo)
+    ten = "".join(f"line{i}\n" for i in range(1, 11))
+    (repo / "f.py").write_text(ten)
+    dispatch(_payload(repo, "PostToolUse", "Read", file_path="f.py"))
+    (repo / "f.py").write_text(ten.replace("line1\n", "LINE1\n"))
+    edits = [
+        {"old_string": "line8\n", "new_string": "a\n"},
+        {"old_string": "line10\n", "new_string": "b\n"},
+    ]
+    r = dispatch(_payload(repo, "PreToolUse", "MultiEdit", file_path="f.py", edits=edits))
+    assert r.action == "allow+notice"
+    bad = [
+        {"old_string": "line8\n", "new_string": "a\n"},
+        {"old_string": "line1\n", "new_string": "b\n"},
+    ]
+    assert (
+        dispatch(_payload(repo, "PreToolUse", "MultiEdit", file_path="f.py", edits=bad)).action
+        == "deny"
+    )
+
+
+def test_should_treat_malformed_edits_as_full_write(repo: Path) -> None:
+    _init(repo)
+    (repo / "f.py").write_text("v1\n")
+    dispatch(_payload(repo, "PostToolUse", "Read", file_path="f.py"))
+    (repo / "f.py").write_text("v2\n")
+    r = dispatch(_payload(repo, "PreToolUse", "MultiEdit", file_path="f.py", edits="nope"))
+    assert r.action == "deny"
+    r2 = dispatch(_payload(repo, "PreToolUse", "MultiEdit", file_path="f.py", edits=[{"x": 1}]))
+    assert r2.action == "deny"
+    r3 = dispatch(_payload(repo, "PreToolUse", "MultiEdit", file_path="f.py", edits=[1]))
+    assert r3.action == "deny"
+    r4 = dispatch(_payload(repo, "PreToolUse", "Edit", file_path="f.py", old_string=1))
+    assert r4.action == "deny"
+
+
+def test_should_keep_view_after_hunk_allowed_edit_recorded(repo: Path) -> None:
+    ledger = _init(repo)
+    ten = "".join(f"line{i}\n" for i in range(1, 11))
+    (repo / "f.py").write_text(ten)
+    dispatch(_payload(repo, "PostToolUse", "Read", file_path="f.py"))
+    (repo / "f.py").write_text(ten.replace("line1\n", "LINE1\n"))
+    (repo / "f.py").write_text(ten.replace("line1\n", "LINE1\n").replace("line9\n", "x\n"))
+    dispatch(
+        _payload(
+            repo, "PostToolUse", "Edit", file_path="f.py", old_string="line9\n", new_string="x\n"
+        )
+    )
+    view_hash = ledger.begin("sess-1").read_set()["f.py"]
+    assert ledger.load_blob(view_hash) == ten.replace("line9\n", "x\n").encode()

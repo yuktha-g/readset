@@ -77,7 +77,7 @@ def main() -> int:
     rows = (
         ("interpreter start + no-op event", baseline),
         ("PostToolUse Read", reads),
-        ("PreToolUse Edit, readset scope", edits),
+        ("PreToolUse Edit, stale check", edits),
     )
     for name, samples in rows:
         print(

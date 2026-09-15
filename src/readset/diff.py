@@ -88,6 +88,11 @@ def render_message(conflict: Conflict) -> str:
             f"readset: write to {conflict.path} blocked - files you read and are relying on"
             " have changed."
         )
+    elif conflict.region_conflict:
+        lines.append(
+            f"readset: write to {conflict.path} blocked - the region you are editing changed"
+            " after you read it."
+        )
     else:
         lines.append(
             f"readset: write to {conflict.path} blocked - the file changed after you read it."
@@ -112,3 +117,18 @@ def render_message(conflict: Conflict) -> str:
         + " again, then retry your edit against the current content."
     )
     return "\n".join(lines)
+
+
+def render_notice(path: str, diff: str, changed_by: str | None, changed_by_type: str | None) -> str:
+    """Notice text when a write is allowed but the file changed outside the edited region."""
+    who = ""
+    if changed_by:
+        who = f" (changed by {changed_by}"
+        who += f" ({changed_by_type}))" if changed_by_type else ")"
+    body = [
+        f"readset: heads-up - {path} changed since you read it{who}, outside the region you"
+        " are editing. Your edit was allowed. The changes:",
+        "",
+        diff.rstrip("\n"),
+    ]
+    return "\n".join(body)

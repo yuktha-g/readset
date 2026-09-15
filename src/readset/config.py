@@ -10,14 +10,16 @@ from typing import Literal
 from readset.paths import DEFAULT_IGNORE, LEDGER_DIR
 
 CONFIG_FILE = "config.json"
-Scope = Literal["readset", "target"]
+Scope = Literal["strict", "hunk", "target"]
+SCOPES: tuple[Scope, ...] = ("strict", "hunk", "target")
 
 
 @dataclass(frozen=True)
 class Config:
     """Validation scope, diff size cap and ignore patterns."""
 
-    scope: Scope = "readset"
+    scope: Scope = "hunk"
+    hunk_margin: int = 3
     diff_max_lines: int = 200
     ignore: tuple[str, ...] = DEFAULT_IGNORE
 
@@ -34,14 +36,20 @@ def load(root: Path) -> Config:
         return Config()
     if not isinstance(raw, dict):
         return Config()
-    scope: Scope = "target" if raw.get("scope") == "target" else "readset"
+    raw_scope = raw.get("scope", "hunk")
+    scope: Scope = raw_scope if raw_scope in SCOPES else "hunk"
+    hunk_margin = raw.get("hunk_margin", 3)
+    if not isinstance(hunk_margin, int) or hunk_margin < 0:
+        hunk_margin = 3
     diff_max_lines = raw.get("diff_max_lines", 200)
     if not isinstance(diff_max_lines, int) or diff_max_lines < 1:
         diff_max_lines = 200
     ignore = raw.get("ignore", list(DEFAULT_IGNORE))
     if not isinstance(ignore, list) or not all(isinstance(p, str) for p in ignore):
         ignore = list(DEFAULT_IGNORE)
-    return Config(scope=scope, diff_max_lines=diff_max_lines, ignore=tuple(ignore))
+    return Config(
+        scope=scope, hunk_margin=hunk_margin, diff_max_lines=diff_max_lines, ignore=tuple(ignore)
+    )
 
 
 def save(root: Path, config: Config) -> None:
