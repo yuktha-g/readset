@@ -53,3 +53,24 @@ def test_should_exit_zero_with_no_output_when_ledger_corrupt(repo: Path) -> None
     assert r.returncode == 0
     assert r.stdout == ""
     assert (repo / ".readset" / "errors.log").exists()
+
+
+def test_should_route_to_codex_adapter_when_agent_flag_given(repo: Path) -> None:
+    Ledger.open(repo)
+    (repo / "a.py").write_text("v1\n")
+    payload = {
+        "session_id": "cx",
+        "hook_event_name": "PostToolUse",
+        "cwd": str(repo),
+        "tool_name": "Bash",
+        "tool_input": {"command": "cat a.py"},
+    }
+    r = subprocess.run(
+        [sys.executable, "-m", "readset.cli", "hook", "--agent", "codex"],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0
+    assert "a.py" in Ledger.open(repo).begin("cx").read_set()

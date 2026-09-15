@@ -11,31 +11,21 @@ terminals on one repo are two transactions.
 
 from __future__ import annotations
 
-import json
-import traceback
-from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any
 
 from readset.config import load as load_config
 from readset.errors import OutsideRepoError
+from readset.hooks._runner import HookResult, allow, deny, run
 from readset.ledger import Ledger
-from readset.paths import LEDGER_DIR, find_ledger_root, is_ignored, relative_path
+from readset.paths import find_ledger_root, is_ignored, relative_path
 from readset.txn import Conflict
 
 READ_TOOLS = frozenset({"Read"})
 WRITE_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 PATH_FIELDS = ("file_path", "notebook_path")
-ERROR_LOG = "errors.log"
 
-
-@dataclass(frozen=True)
-class HookResult:
-    """What the hook prints and how it exits. `action` names what happened, for tests and logs."""
-
-    stdout: str = ""
-    exit_code: int = 0
-    action: str = "noop"
+__all__ = ["HookResult", "dispatch", "main"]
 
 
 def dispatch(payload: dict[str, Any]) -> HookResult:
@@ -99,25 +89,9 @@ def dispatch(payload: dict[str, Any]) -> HookResult:
             tool_use_id=tool_use_id,
             diff_max_lines=config.diff_max_lines,
         )
-        if not isinstance(result, Conflict):
-            if not result.notice:
-                return HookResult(action="allow")
-            body = {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "allow",
-                    "additionalContext": result.notice,
-                }
-            }
-            return HookResult(stdout=json.dumps(body), action="allow+notice")
-        body = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": result.message,
-            }
-        }
-        return HookResult(stdout=json.dumps(body), action="deny")
+        if isinstance(result, Conflict):
+            return deny(result.message)
+        return allow(result.notice)
 
     if event == "PostToolUse" and tool in READ_TOOLS:
         txn.record_read(rel)
@@ -173,34 +147,4 @@ def _relative(root: Path, tool_input: dict[str, Any]) -> str | None:
 
 def main(stdin: IO[str], stdout: IO[str]) -> int:
     """Fail-open entry point used by `readset hook`. Always returns 0."""
-    raw = stdin.read()
-    try:
-        payload = json.loads(raw)
-        if not isinstance(payload, dict):
-            return 0
-        result = dispatch(payload)
-    except Exception:  # fail-open by design; the traceback is logged
-        _log_error(raw)
-        return 0
-    if result.stdout:
-        stdout.write(result.stdout)
-    return result.exit_code
-
-
-def _log_error(raw: str) -> None:
-    cwd = "."
-    try:
-        parsed = json.loads(raw)
-        if isinstance(parsed, dict):
-            cwd = str(parsed.get("cwd", "."))
-    except ValueError:
-        pass
-    root = find_ledger_root(Path(cwd))
-    if root is None:
-        return
-    try:
-        with (root / LEDGER_DIR / ERROR_LOG).open("a") as fh:
-            fh.write(traceback.format_exc())
-            fh.write("\n")
-    except OSError:
-        return
+    return run(dispatch, stdin, stdout)

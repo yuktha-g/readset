@@ -6,8 +6,11 @@ make concurrent writers from parallel agents safe.
 
 from __future__ import annotations
 
+import contextlib
+import os
 import sqlite3
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -124,12 +127,19 @@ class Ledger:
     # -- blobs ---------------------------------------------------------------------------
 
     def store_blob(self, data: bytes) -> str:
-        """Write data to the blob store, keyed by its digest, and return the digest."""
+        """Write data to the blob store, keyed by its digest, and return the digest.
+
+        Safe under concurrent writers: each process writes its own temp file and the
+        final rename is atomic, so two processes storing the same content both succeed.
+        """
         digest = hash_bytes(data)
         target = self.objects_dir / digest
-        if not target.exists():
-            tmp = target.with_name(f"{digest}.tmp")
-            tmp.write_bytes(data)
+        if target.exists():
+            return digest
+        tmp = target.with_name(f"{digest}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
+        tmp.write_bytes(data)
+        # A concurrent writer may have completed the same blob; that is fine.
+        with contextlib.suppress(FileNotFoundError):
             tmp.replace(target)
         return digest
 

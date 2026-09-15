@@ -4,21 +4,38 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+Agent = Literal["claude", "codex"]
+AGENTS: tuple[Agent, ...] = ("claude", "codex")
 
 WRITE_MATCHER = "Edit|Write|MultiEdit|NotebookEdit"
 POST_MATCHER = "Read|Edit|Write|MultiEdit|NotebookEdit|Bash"
+CODEX_PATCH_MATCHER = "apply_patch"
+CODEX_POST_MATCHER = "apply_patch|Bash"
 GITIGNORE_LINE = ".readset/"
 HOOK_TIMEOUT_SECONDS = 10
 
 
-def _handler(executable: str) -> dict[str, Any]:
-    return {"type": "command", "command": f"{executable} hook", "timeout": HOOK_TIMEOUT_SECONDS}
+def _handler(executable: str, agent: Agent) -> dict[str, Any]:
+    suffix = "" if agent == "claude" else f" --agent {agent}"
+    return {
+        "type": "command",
+        "command": f"{executable} hook{suffix}",
+        "timeout": HOOK_TIMEOUT_SECONDS,
+    }
 
 
-def hook_config(executable: str) -> dict[str, list[dict[str, Any]]]:
-    """The hook groups readset needs, keyed by event name."""
-    handler = _handler(executable)
+def hook_config(executable: str, agent: Agent = "claude") -> dict[str, list[dict[str, Any]]]:
+    """The hook groups readset needs for an agent, keyed by event name."""
+    handler = _handler(executable, agent)
+    if agent == "codex":
+        return {
+            "PreToolUse": [{"matcher": CODEX_PATCH_MATCHER, "hooks": [handler]}],
+            "PostToolUse": [{"matcher": CODEX_POST_MATCHER, "hooks": [handler]}],
+            "SessionStart": [{"matcher": "*", "hooks": [handler]}],
+            "SessionEnd": [{"matcher": "*", "hooks": [handler]}],
+        }
     return {
         "PreToolUse": [{"matcher": WRITE_MATCHER, "hooks": [handler]}],
         "PostToolUse": [{"matcher": POST_MATCHER, "hooks": [handler]}],
@@ -29,10 +46,26 @@ def hook_config(executable: str) -> dict[str, list[dict[str, Any]]]:
     }
 
 
-def is_readset_hook(handler: dict[str, Any]) -> bool:
-    """True for a handler readset installed, regardless of the executable path."""
+def settings_file(agent: Agent, root: Path, *, user: bool) -> Path:
+    """Where each agent keeps its hooks configuration."""
+    base = Path.home() if user else root
+    if agent == "codex":
+        return base / ".codex" / "hooks.json"
+    return base / ".claude" / "settings.json"
+
+
+def is_readset_hook(handler: dict[str, Any], agent: Agent | None = None) -> bool:
+    """True for a handler readset installed, regardless of the executable path.
+
+    With `agent`, only handlers installed for that agent match.
+    """
     command = handler.get("command")
-    return isinstance(command, str) and command.rstrip().endswith(" hook") and "readset" in command
+    if not (isinstance(command, str) and "readset" in command and " hook" in command):
+        return False
+    if agent is None:
+        return True
+    is_codex = "--agent codex" in command
+    return is_codex if agent == "codex" else not is_codex
 
 
 def _load(settings_path: Path) -> dict[str, Any]:
@@ -48,8 +81,10 @@ def _save(settings_path: Path, data: dict[str, Any]) -> None:
     settings_path.write_text(json.dumps(data, indent=2) + "\n")
 
 
-def _strip(hooks: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    """Remove readset handlers from a hooks mapping. Returns (new mapping, changed).
+def _strip(hooks: dict[str, Any], agent: Agent | None = None) -> tuple[dict[str, Any], bool]:
+    """Remove readset handlers (for one agent, or all) from a hooks mapping.
+
+    Returns (new mapping, changed).
 
     Anything that does not look like a hook group is passed through untouched.
     """
@@ -65,7 +100,7 @@ def _strip(hooks: dict[str, Any]) -> tuple[dict[str, Any], bool]:
                 kept_groups.append(group)
                 continue
             handlers = [
-                h for h in group["hooks"] if not (isinstance(h, dict) and is_readset_hook(h))
+                h for h in group["hooks"] if not (isinstance(h, dict) and is_readset_hook(h, agent))
             ]
             if len(handlers) != len(group["hooks"]):
                 changed = True
@@ -76,14 +111,14 @@ def _strip(hooks: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     return out, changed
 
 
-def install_hooks(settings_path: Path, executable: str) -> bool:
-    """Merge readset's hooks into settings.json. Returns True if the file changed."""
+def install_hooks(settings_path: Path, executable: str, agent: Agent = "claude") -> bool:
+    """Merge readset's hooks into a hooks file. Returns True if the file changed."""
     data = _load(settings_path)
     raw = data.get("hooks")
     existing: dict[str, Any] = raw if isinstance(raw, dict) else {}
-    stripped, _ = _strip(existing)
+    stripped, _ = _strip(existing, agent)
     merged = dict(stripped)
-    for event, groups in hook_config(executable).items():
+    for event, groups in hook_config(executable, agent).items():
         current = merged.get(event, [])
         if not isinstance(current, list):
             current = [current]

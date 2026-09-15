@@ -76,3 +76,24 @@ def test_should_expose_sqlite_errors_when_db_corrupt(repo: Path) -> None:
     ledger.db_path.write_bytes(b"not a database")
     with pytest.raises(sqlite3.DatabaseError):
         Ledger.open(repo).live_transactions()
+
+
+def test_should_store_same_blob_from_many_processes_without_error(repo: Path) -> None:
+    import multiprocessing as mp
+
+    ledger = Ledger.open(repo)
+    ctx = mp.get_context("spawn")
+    procs = [ctx.Process(target=_store_many, args=(str(repo),)) for _ in range(6)]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join(timeout=60)
+    assert all(p.exitcode == 0 for p in procs)
+    assert ledger.load_blob(ledger.store_blob(b"shared")) == b"shared"
+    assert not [f for f in ledger.objects_dir.iterdir() if f.name.endswith(".tmp")]
+
+
+def _store_many(root: str) -> None:
+    ledger = Ledger.open(root)
+    for _ in range(200):
+        ledger.store_blob(b"shared")

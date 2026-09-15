@@ -13,8 +13,15 @@ from readset._term import paint
 from readset.config import Config, save
 from readset.diff import human_age
 from readset.errors import NotInRepoError
-from readset.hooks import claude_code
-from readset.install import ensure_gitignore, install_hooks, remove_hooks
+from readset.hooks import claude_code, codex
+from readset.install import (
+    AGENTS,
+    Agent,
+    ensure_gitignore,
+    install_hooks,
+    remove_hooks,
+    settings_file,
+)
 from readset.ledger import Ledger
 from readset.paths import LEDGER_DIR, find_ledger_root, find_repo_root
 
@@ -38,10 +45,8 @@ def _executable() -> str:
     return f"{sys.executable} -m readset.cli"
 
 
-def _settings_path(user: bool, root: Path) -> Path:
-    if user:
-        return Path.home() / ".claude" / "settings.json"
-    return root / ".claude" / "settings.json"
+def _agents(choice: str) -> list[Agent]:
+    return list(AGENTS) if choice == "all" else [choice]  # type: ignore[list-item]
 
 
 def _repo_root() -> Path:
@@ -64,23 +69,28 @@ def cmd_init(args: argparse.Namespace) -> int:
     ledger = Ledger.open(root)
     save(root, Config(scope=args.scope))
     ignored = ensure_gitignore(root)
-    settings = _settings_path(args.user, root)
-    changed = install_hooks(settings, _executable())
     print(paint("readset initialised", "green"))
     print(f"  ledger    {ledger.dir}")
     print(f"  scope     {args.scope}")
-    print(f"  hooks     {settings} ({'updated' if changed else 'already installed'})")
+    for agent in _agents(args.agent):
+        settings = settings_file(agent, root, user=args.user)
+        changed = install_hooks(settings, _executable(), agent)
+        state = "updated" if changed else "already installed"
+        print(f"  {agent:9s} {settings} ({state})")
     if ignored:
         print(f"  gitignore added {LEDGER_DIR}/")
-    print("\nOpen a second Claude Code session on this repo and have both edit the same file.")
+    print("\nOpen a second agent session on this repo and have both edit the same file.")
     return 0
 
 
 def cmd_uninstall(args: argparse.Namespace) -> int:
     root = _repo_root()
-    settings = _settings_path(args.user, root)
-    changed = remove_hooks(settings)
-    print("hooks removed" if changed else "no readset hooks found")
+    removed = [
+        agent
+        for agent in _agents(args.agent)
+        if remove_hooks(settings_file(agent, root, user=args.user))
+    ]
+    print(f"hooks removed for {', '.join(removed)}" if removed else "no readset hooks found")
     print(f"ledger left in place at {root / LEDGER_DIR}; delete it to remove all state")
     return 0
 
@@ -158,12 +168,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     init = sub.add_parser("init", help="initialise this repo and install Claude Code hooks")
     init.add_argument("--scope", choices=["strict", "hunk", "target"], default="hunk")
-    init.add_argument(
-        "--user", action="store_true", help="install hooks in ~/.claude/settings.json"
-    )
+    init.add_argument("--agent", choices=[*AGENTS, "all"], default="claude")
+    init.add_argument("--user", action="store_true", help="install into the user-level config")
     init.set_defaults(func=cmd_init)
 
     un = sub.add_parser("uninstall", help="remove the hooks readset installed")
+    un.add_argument("--agent", choices=[*AGENTS, "all"], default="all")
     un.add_argument("--user", action="store_true")
     un.set_defaults(func=cmd_uninstall)
 
@@ -181,7 +191,8 @@ def build_parser() -> argparse.ArgumentParser:
     demo = sub.add_parser("demo", help="watch two agents collide, offline")
     demo.set_defaults(func=cmd_demo)
 
-    sub.add_parser("hook", help="hook entry point; reads a Claude Code payload on stdin")
+    hook = sub.add_parser("hook", help="hook entry point; reads an agent's payload on stdin")
+    hook.add_argument("--agent", choices=AGENTS, default="claude")
     return parser
 
 
@@ -189,6 +200,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "hook":
+        if args.agent == "codex":
+            return codex.main(sys.stdin, sys.stdout)
         return claude_code.main(sys.stdin, sys.stdout)
     if args.command is None:
         parser.print_help()

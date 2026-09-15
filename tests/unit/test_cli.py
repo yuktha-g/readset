@@ -146,3 +146,17 @@ def test_should_parse_durations_when_given_units() -> None:
     assert parse_duration("1d") == 86400
     with pytest.raises(ValueError, match="duration"):
         parse_duration("soon")
+
+
+def test_should_install_codex_hooks_when_agent_all(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(repo)
+    assert main(["init", "--agent", "all"]) == 0
+    assert (repo / ".codex" / "hooks.json").exists()
+    assert (repo / ".claude" / "settings.json").exists()
+    out = capsys.readouterr().out
+    assert "codex" in out and "claude" in out
+    assert main(["uninstall", "--agent", "codex"]) == 0
+    assert json.loads((repo / ".codex" / "hooks.json").read_text()).get("hooks", {}) == {}
+    assert "PreToolUse" in json.loads((repo / ".claude" / "settings.json").read_text())["hooks"]

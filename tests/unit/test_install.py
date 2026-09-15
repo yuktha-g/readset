@@ -3,7 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from readset.install import ensure_gitignore, hook_config, install_hooks, remove_hooks
+from readset.install import (
+    ensure_gitignore,
+    hook_config,
+    install_hooks,
+    remove_hooks,
+    settings_file,
+)
 
 
 def test_should_cover_required_events_when_config_built() -> None:
@@ -95,3 +101,26 @@ def test_should_append_gitignore_entry_when_missing(repo: Path) -> None:
 def test_should_create_gitignore_when_absent(repo: Path) -> None:
     assert ensure_gitignore(repo) is True
     assert (repo / ".gitignore").read_text() == ".readset/\n"
+
+
+def test_should_build_codex_config_when_agent_is_codex() -> None:
+    cfg = hook_config("/x/readset", "codex")
+    assert set(cfg) == {"PreToolUse", "PostToolUse", "SessionStart", "SessionEnd"}
+    assert cfg["PreToolUse"][0]["matcher"] == "apply_patch"
+    assert cfg["PreToolUse"][0]["hooks"][0]["command"] == "/x/readset hook --agent codex"
+
+
+def test_should_keep_both_agents_hooks_when_installed_in_one_file(tmp_path: Path) -> None:
+    settings = tmp_path / "hooks.json"
+    install_hooks(settings, "/x/readset", "claude")
+    install_hooks(settings, "/x/readset", "codex")
+    text = settings.read_text()
+    assert '/x/readset hook"' in text and "hook --agent codex" in text
+    assert remove_hooks(settings) is True
+    assert json.loads(settings.read_text())["hooks"] == {}
+
+
+def test_should_place_settings_per_agent_when_asked(tmp_path: Path) -> None:
+    assert settings_file("claude", tmp_path, user=False) == tmp_path / ".claude" / "settings.json"
+    assert settings_file("codex", tmp_path, user=False) == tmp_path / ".codex" / "hooks.json"
+    assert settings_file("codex", tmp_path, user=True) == Path.home() / ".codex" / "hooks.json"
