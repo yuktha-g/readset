@@ -155,7 +155,7 @@ transaction's `read_set` are removed by `gc`.
 - **Bash heuristic.** After a `Bash` tool call, any read-set entry whose relative path appears
   as a substring of the command is refreshed to the current disk hash and treated as this
   transaction's own write. Handles `sed -i` and friends. Documented as a heuristic.
-- **Stale transactions.** Sessions that never emit `Stop` remain open. `readset status` shows
+- **Stale transactions.** Sessions that never emit `SessionEnd` remain open. `readset status` shows
   them with age; `readset gc --older-than 24h` ends them and collects blobs.
 
 ## Claude Code hook contract
@@ -170,7 +170,8 @@ transaction's `read_set` are removed by `gc`.
 | `PostToolUse` | `Read\|NotebookEdit\|Edit\|Write\|MultiEdit\|Bash` | `record_read` / `record_write` / Bash heuristic |
 | `SubagentStart` | `*` | `begin(agent_id, kind="agent", parent=session_id)` |
 | `SubagentStop` | `*` | `end(agent_id)` with fold-into-parent |
-| `Stop` | `*` | `end(session_id)` |
+| `SessionStart` | `*` | `begin(session_id, kind="session")` |
+| `SessionEnd` | `*` | `end(session_id)` |
 
 Hook command: `"<absolute path to readset> hook"`. Input is the hook JSON on stdin.
 
@@ -179,7 +180,9 @@ Path fields per tool: `Read.file_path`, `Edit.file_path`, `Write.file_path`,
 a failed read records nothing.
 
 Transaction identity: `agent_id` if present in the payload, else `session_id`. A session
-transaction is begun implicitly on the first event carrying an unseen `session_id`.
+transaction is begun on `SessionStart`, or implicitly on the first event carrying an unseen `session_id`,
+and ended on `SessionEnd`. `Stop` is deliberately not used: it fires after every assistant turn,
+and read sets must survive across turns.
 
 Block output (exit 0, stdout):
 
