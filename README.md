@@ -23,6 +23,8 @@ on top of a version it never saw.
 
 ## What it looks like
 
+![readset demo: agent-a is blocked with a diff after agent-b changed the file, re-reads, and succeeds](docs/assets/demo.svg)
+
 ```
 $ readset demo
 

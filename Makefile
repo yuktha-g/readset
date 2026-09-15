@@ -1,6 +1,6 @@
 UV ?= uv
 
-.PHONY: setup test lint fmt types check demo bench build clean
+.PHONY: setup test lint fmt types check demo demo-svg bench build clean
 
 setup:
 	$(UV) sync --group dev
@@ -23,6 +23,10 @@ check: lint types test
 
 demo:
 	$(UV) run readset demo
+
+demo-svg:
+	$(UV) run python scripts/demo_cast.py > docs/assets/demo.cast
+	uvx --python 3.12 termtosvg render docs/assets/demo.cast docs/assets/demo.svg -t window_frame_powershell -M 1500
 
 bench:
 	$(UV) run python scripts/bench.py
