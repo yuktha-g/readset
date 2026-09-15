@@ -167,3 +167,18 @@ def test_should_shorten_uuid_ids_when_displaying() -> None:
 
     assert _short("3ebbb534-35fd-4aaf-aa41-83512a6b6f63") == "3ebbb534"
     assert _short("agent-a") == "agent-a"
+
+
+def test_should_emit_json_when_log_json_requested(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(repo)
+    ledger = Ledger.open(repo)
+    (repo / "a.py").write_text("v1\n")
+    t = ledger.begin("s")
+    t.record_read("a.py")
+    (repo / "a.py").write_text("v2\n")
+    t.validate_write("a.py")
+    assert main(["log", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data[0]["path"] == "a.py" and data[0]["kind"] == "stale_read"

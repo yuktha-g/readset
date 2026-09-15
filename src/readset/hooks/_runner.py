@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from typing import IO, Any
 from readset.paths import LEDGER_DIR, find_ledger_root
 
 ERROR_LOG = "errors.log"
+ERROR_LOG_MAX_BYTES = 256_000
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,8 @@ def allow(notice: str = "") -> HookResult:
 def run(dispatch: Callable[[dict[str, Any]], HookResult], stdin: IO[str], stdout: IO[str]) -> int:
     """Fail-open entry point. Always returns 0; internal errors go to .readset/errors.log."""
     raw = stdin.read()
+    if not raw.strip():
+        return 0
     try:
         payload = json.loads(raw)
         if not isinstance(payload, dict):
@@ -66,19 +70,28 @@ def run(dispatch: Callable[[dict[str, Any]], HookResult], stdin: IO[str], stdout
 
 
 def _log_error(raw: str) -> None:
+    """Append the traceback plus a one-line summary of the payload; keep the log bounded."""
     cwd = "."
+    summary = f"raw={raw[:120]!r}"
     try:
         parsed = json.loads(raw)
         if isinstance(parsed, dict):
             cwd = str(parsed.get("cwd", "."))
+            summary = (
+                f"event={parsed.get('hook_event_name')} tool={parsed.get('tool_name')}"
+                f" session={parsed.get('session_id')} agent={parsed.get('agent_id')}"
+            )
     except ValueError:
         pass
     root = find_ledger_root(Path(cwd))
     if root is None:
         return
+    path = root / LEDGER_DIR / ERROR_LOG
     try:
-        with (root / LEDGER_DIR / ERROR_LOG).open("a") as fh:
-            fh.write(traceback.format_exc())
-            fh.write("\n")
+        entry = f"--- {time.strftime('%Y-%m-%d %H:%M:%S')} {summary}\n{traceback.format_exc()}\n"
+        existing = path.read_text() if path.exists() else ""
+        if len(existing) + len(entry) > ERROR_LOG_MAX_BYTES:
+            existing = existing[-(ERROR_LOG_MAX_BYTES // 2) :]
+        path.write_text(existing + entry)
     except OSError:
         return

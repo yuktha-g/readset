@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import sys
@@ -11,14 +12,17 @@ from pathlib import Path
 from readset import __version__
 from readset._term import paint
 from readset.config import Config, save
+from readset.config import load as load_config
 from readset.diff import human_age
 from readset.errors import NotInRepoError
 from readset.hooks import claude_code, codex
+from readset.hooks._runner import ERROR_LOG
 from readset.install import (
     AGENTS,
     Agent,
     ensure_gitignore,
     install_hooks,
+    is_readset_hook,
     remove_hooks,
     settings_file,
 )
@@ -126,6 +130,9 @@ def cmd_log(args: argparse.Namespace) -> int:
         rows = conn.execute(
             "select * from conflict_log order by id desc limit ?", (args.limit,)
         ).fetchall()
+    if args.json:
+        print(json.dumps([dict(row) for row in rows], indent=2))
+        return 0
     if not rows:
         print("no conflicts recorded")
         return 0
@@ -158,6 +165,104 @@ def cmd_gc(args: argparse.Namespace) -> int:
     return 0
 
 
+def _plugin_installed() -> bool:
+    """True if the readset Claude Code plugin is installed for this user."""
+    path = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return False
+    plugins = data.get("plugins", {}) if isinstance(data, dict) else {}
+    return isinstance(plugins, dict) and any(k.startswith("readset@") for k in plugins)
+
+
+def _hooks_present(path: Path) -> bool:
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return False
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    if not isinstance(hooks, dict):
+        return False
+    for groups in hooks.values():
+        if not isinstance(groups, list):
+            continue
+        for group in groups:
+            handlers = group.get("hooks", []) if isinstance(group, dict) else []
+            if any(isinstance(h, dict) and is_readset_hook(h) for h in handlers):
+                return True
+    return False
+
+
+def cmd_doctor(_: argparse.Namespace) -> int:
+    """Check the things that make readset silently do nothing, and print a paste-able report."""
+    ok = True
+
+    def line(name: str, good: bool, detail: str) -> None:
+        nonlocal ok
+        ok = ok and good
+        mark = paint("ok", "green") if good else paint("FAIL", "red")
+        print(f"  {name:16s} {mark:4s}  {detail}")
+
+    print(paint(f"readset {__version__} doctor", "bold"))
+    py = sys.version_info
+    line("python", py >= (3, 10), f"{py.major}.{py.minor}.{py.micro} at {sys.executable}")
+
+    root = find_ledger_root(Path.cwd())
+    if root is None:
+        line("ledger", False, "not initialised here; run `readset init` or install the plugin")
+        print(paint("\nsome checks failed", "red"))
+        return 1
+    try:
+        ledger = Ledger.open(root)
+        live = ledger.live_transactions()
+        line("ledger", True, f"{ledger.db_path} ({len(live)} live transaction(s))")
+    except Exception as exc:  # the whole point of doctor is to surface this
+        line("ledger", False, f"{root / LEDGER_DIR / 'ledger.db'}: {type(exc).__name__}: {exc}")
+        ledger = None
+
+    cfg = load_config(root)
+    line("config", True, f"scope={cfg.scope} hunk_margin={cfg.hunk_margin}")
+
+    plugin = _plugin_installed()
+    found = []
+    for agent in AGENTS:
+        for user in (False, True):
+            path = settings_file(agent, root, user=user)
+            if _hooks_present(path):
+                found.append(f"{agent}: {path}")
+    if plugin:
+        line("hooks (claude)", True, "installed via the readset plugin")
+    elif any(f.startswith("claude") for f in found):
+        line("hooks (claude)", True, next(f for f in found if f.startswith("claude")))
+    else:
+        line(
+            "hooks (claude)",
+            False,
+            "no readset hooks found; run `readset init` or install the plugin",
+        )
+    codex = [f for f in found if f.startswith("codex")]
+    if codex:
+        line("hooks (codex)", True, codex[0])
+
+    errors = root / LEDGER_DIR / ERROR_LOG
+    if errors.exists() and errors.stat().st_size > 0:
+        tail = errors.read_text().rstrip("\n").splitlines()[-8:]
+        line("errors.log", False, f"{errors} ({errors.stat().st_size} bytes); last lines:")
+        for entry in tail:
+            print("        " + entry)
+    else:
+        line("errors.log", True, "empty")
+
+    if ledger is not None:
+        with ledger.connect() as conn:
+            conflicts = conn.execute("select count(*) from conflict_log").fetchone()[0]
+        print(f"  {'conflicts':16s} {'':4s}  {conflicts} caught so far in this repo")
+
+    print(paint("\nall checks passed", "green") if ok else paint("\nsome checks failed", "red"))
+    return 0 if ok else 1
+
+
 def cmd_demo(_: argparse.Namespace) -> int:
     from readset.demo import run
 
@@ -188,11 +293,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     log = sub.add_parser("log", help="conflicts caught, newest first")
     log.add_argument("--limit", type=int, default=20)
+    log.add_argument("--json", action="store_true", help="machine-readable output")
     log.set_defaults(func=cmd_log)
 
     gc = sub.add_parser("gc", help="end stale transactions and collect blobs")
     gc.add_argument("--older-than", default="24h")
     gc.set_defaults(func=cmd_gc)
+
+    doctor = sub.add_parser("doctor", help="check the install and print a paste-able report")
+    doctor.set_defaults(func=cmd_doctor)
 
     demo = sub.add_parser("demo", help="watch two agents collide, offline")
     demo.set_defaults(func=cmd_demo)

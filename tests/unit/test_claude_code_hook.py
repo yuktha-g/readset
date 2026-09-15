@@ -308,3 +308,25 @@ def test_should_pass_auto_init_through_main(repo: Path) -> None:
     out = io.StringIO()
     assert main(io.StringIO(json.dumps(_payload(repo, "SessionStart"))), out, auto_init=True) == 0
     assert (repo / ".readset").exists()
+
+
+def test_should_ignore_empty_stdin_without_logging(repo: Path) -> None:
+    _init(repo)
+    out = io.StringIO()
+    assert main(io.StringIO("   \n"), out) == 0
+    assert out.getvalue() == ""
+    assert not (repo / ".readset" / "errors.log").exists()
+
+
+def test_should_record_event_summary_and_cap_log_when_error_logged(repo: Path) -> None:
+    from readset.hooks._runner import ERROR_LOG_MAX_BYTES
+
+    ledger = _init(repo)
+    log = repo / ".readset" / "errors.log"
+    log.write_text("x" * ERROR_LOG_MAX_BYTES)
+    ledger.db_path.write_bytes(b"garbage")
+    payload = _payload(repo, "PreToolUse", "Edit", file_path="a.py")
+    main(io.StringIO(json.dumps(payload)), io.StringIO())
+    text = log.read_text()
+    assert "event=PreToolUse tool=Edit session=sess-1" in text
+    assert len(text) < ERROR_LOG_MAX_BYTES

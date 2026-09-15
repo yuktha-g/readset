@@ -1,5 +1,11 @@
 # readset
 
+[![ci](https://github.com/yuktha-g/readset/actions/workflows/ci.yml/badge.svg)](https://github.com/yuktha-g/readset/actions/workflows/ci.yml)
+[![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/yuktha-g/readset/blob/main/pyproject.toml)
+[![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](https://github.com/yuktha-g/readset/blob/main/pyproject.toml)
+[![typed](https://img.shields.io/badge/mypy-strict-blue)](https://github.com/yuktha-g/readset/blob/main/pyproject.toml)
+[![licence](https://img.shields.io/badge/licence-MIT-lightgrey)](LICENSE)
+
 **Snapshot isolation for AI agents.** readset stops parallel coding agents from silently
 overwriting each other, by validating every write against what the agent actually read.
 
@@ -190,7 +196,8 @@ readset init [--scope hunk|strict|target] [--agent claude|codex|all] [--user]
                                                  initialise this repo, install hooks
 readset uninstall [--agent ...] [--user]         remove exactly the hooks init added
 readset status                                   live transactions and their read sets
-readset log [--limit N]                          conflicts caught, with diffs
+readset log [--limit N] [--json]                 conflicts caught, with diffs
+readset doctor                                   check the install; paste its output into a bug report
 readset gc [--older-than 24h]                    end stale transactions, free storage
 readset demo                                     the collision above, offline
 ```
