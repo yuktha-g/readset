@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook.cmd\"",
             "timeout": 10
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook.cmd\"",
             "timeout": 10
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook.cmd\"",
             "timeout": 10
           }
         ]
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook.cmd\"",
             "timeout": 10
           }
         ]
@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook\" --auto-init",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook.cmd\" --auto-init",
             "timeout": 10
           }
         ]
@@ -66,7 +66,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/readset-hook.cmd\"",
             "timeout": 10
           }
         ]
