@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+from readset.ledger import Ledger
+
+
+def _run(payload: dict[str, Any]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "readset.cli", "hook"],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _p(repo: Path, session: str, event: str, tool: str, **tool_input: Any) -> dict[str, Any]:
+    return {
+        "session_id": session,
+        "hook_event_name": event,
+        "cwd": str(repo),
+        "tool_name": tool,
+        "tool_input": tool_input,
+        "tool_use_id": "toolu_x",
+    }
+
+
+def test_should_deny_second_session_when_first_session_changed_file(repo: Path) -> None:
+    Ledger.open(repo)
+    (repo / "billing.py").write_text("rate = 0.18\n")
+    assert _run(_p(repo, "A", "PostToolUse", "Read", file_path="billing.py")).returncode == 0
+    assert _run(_p(repo, "B", "PostToolUse", "Read", file_path="billing.py")).returncode == 0
+    (repo / "billing.py").write_text("rate = 0.20\n")
+    assert _run(_p(repo, "B", "PostToolUse", "Edit", file_path="billing.py")).returncode == 0
+    blocked = _run(_p(repo, "A", "PreToolUse", "Edit", file_path="billing.py"))
+    assert blocked.returncode == 0, blocked.stderr
+    out = json.loads(blocked.stdout)
+    reason = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "-rate = 0.18" in reason and "+rate = 0.20" in reason
+    assert "Changed by: B" in reason
+
+
+def test_should_exit_zero_with_no_output_when_ledger_corrupt(repo: Path) -> None:
+    ledger = Ledger.open(repo)
+    ledger.db_path.write_bytes(b"garbage")
+    r = _run(_p(repo, "A", "PreToolUse", "Edit", file_path="x.py"))
+    assert r.returncode == 0
+    assert r.stdout == ""
+    assert (repo / ".readset" / "errors.log").exists()
