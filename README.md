@@ -188,6 +188,20 @@ PreToolUse Edit, stale check         p50   80.4 ms   p95   89.8 ms
 readset's own work is about 1 ms for a read and about 23 ms to validate a 1,000-file
 read set. The rest is Python starting.
 
+## Under contention
+
+`tests/integration/test_concurrency.py` runs many worker processes against one ledger,
+each looping read, validate, increment a shared counter file, record. The counters on disk
+must equal the number of successful writes, or an update was lost.
+
+```
+8 procs x 40 rounds:    100 writes,   220 conflicts caught, 0 errors, disk total 100
+16 procs x 200 rounds:  744 writes, 2,456 conflicts caught, 0 errors, disk total 744   (~1,900 ops/s)
+```
+
+Zero SQLite errors under 16-way contention, every conflict logged, every increment
+accounted for. The test runs in CI on every push.
+
 ## Limitations (v0)
 
 - **Hunk-level applies to string-replacement edits.** A `Write` that replaces a whole file
