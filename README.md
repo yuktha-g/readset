@@ -64,7 +64,7 @@ through. No merge, no lock, no human in the loop.
 **As a Claude Code plugin (zero setup):**
 
 ```
-claude plugin marketplace add yuktha/readset
+claude plugin marketplace add yuktha-g/readset
 claude plugin install readset@readset
 ```
 

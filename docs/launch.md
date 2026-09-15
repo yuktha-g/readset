@@ -86,7 +86,7 @@ Body: the Show HN text, minus the first paragraph, plus the demo SVG.
 
 ## Before posting
 
-- [ ] Replace `yuktha/readset` in `pyproject.toml`, `.claude-plugin/*.json` and README with
+- [ ] Replace `yuktha-g/readset` in `pyproject.toml`, `.claude-plugin/*.json` and README with
       the real GitHub path.
 - [ ] Push, confirm CI is green on all 8 matrix cells.
 - [ ] Tag `v0.1.0`, confirm the PyPI publish workflow succeeds (trusted publisher must be

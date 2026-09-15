@@ -5,8 +5,8 @@
   "author": {
     "name": "Yuktha G"
   },
-  "homepage": "https://github.com/yuktha/readset",
-  "repository": "https://github.com/yuktha/readset",
+  "homepage": "https://github.com/yuktha-g/readset",
+  "repository": "https://github.com/yuktha-g/readset",
   "license": "MIT",
   "keywords": ["concurrency", "parallel-agents", "hooks", "safety", "optimistic-concurrency-control"]
 }
