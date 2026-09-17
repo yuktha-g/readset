@@ -175,6 +175,13 @@ readset merge-check: HEAD into main (base 00c27bb78a)
 not safe to merge: rebase onto main and re-run
 ```
 
+**Run it automatically:** `readset install-git-hook` adds a `prepare-commit-msg` hook (not
+`pre-merge-commit`, whose `MERGE_HEAD` is not reliably resolvable at that stage; see the
+design spec) that runs `merge-check` before every merge commit and aborts it exactly like
+a git conflict would, leaving you to fix it and `git commit` when ready. It does not fire for
+a fast-forward merge (no commit is created) or `git rebase`, and it refuses to overwrite a
+`prepare-commit-msg` hook it did not install. `readset uninstall-git-hook` removes it.
+
 The branch's merge base is its read snapshot. For every file the target branch changed
 since then: if this checkout also changed it, both sides' hunks are compared and anything
 within `hunk_margin` lines **blocks** (git would merge line 8 and line 9 above without a

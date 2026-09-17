@@ -195,6 +195,32 @@ def _hooks_present(path: Path) -> bool:
     return False
 
 
+def cmd_install_git_hook(_: argparse.Namespace) -> int:
+    from readset.git_hook import install_git_hook
+
+    root = _repo_root()
+    result = install_git_hook(root, executable=_executable())
+    if result.installed:
+        print(paint("installed prepare-commit-msg hook", "green"))
+        print("every merge in this repository is now checked by `readset merge-check`")
+        print("(fast-forward merges and rebases are not covered; see the README)")
+        return 0
+    if result.reason == "already installed":
+        print("already installed")
+        return 0
+    print(f"not installed: {result.reason}", file=sys.stderr)
+    return 1
+
+
+def cmd_uninstall_git_hook(_: argparse.Namespace) -> int:
+    from readset.git_hook import uninstall_git_hook
+
+    root = _repo_root()
+    removed = uninstall_git_hook(root)
+    print("hook removed" if removed else "no readset git hook found")
+    return 0
+
+
 def cmd_doctor(_: argparse.Namespace) -> int:
     """Check the things that make readset silently do nothing, and print a paste-able report."""
     ok = True
@@ -245,6 +271,18 @@ def cmd_doctor(_: argparse.Namespace) -> int:
     codex = [f for f in found if f.startswith("codex")]
     if codex:
         line("hooks (codex)", True, codex[0])
+
+    from readset.git_hook import HOOK_NAME, MARKER, hooks_dir
+
+    dir_ = hooks_dir(root)
+    hook_path = dir_ / HOOK_NAME if dir_ else None
+    if hook_path and hook_path.exists() and MARKER in hook_path.read_text(errors="replace"):
+        print(f"  {'git merge hook':16s} {paint('ok', 'green'):4s}  {hook_path}")
+    else:
+        print(
+            f"  {'git merge hook':16s} {'':4s}  "
+            "not installed (optional); run `readset install-git-hook` to check merges automatically"
+        )
 
     errors = root / LEDGER_DIR / ERROR_LOG
     if errors.exists() and errors.stat().st_size > 0:
@@ -357,6 +395,15 @@ def build_parser() -> argparse.ArgumentParser:
     gc = sub.add_parser("gc", help="end stale transactions and collect blobs")
     gc.add_argument("--older-than", default="24h")
     gc.set_defaults(func=cmd_gc)
+
+    igh = sub.add_parser(
+        "install-git-hook",
+        help="run merge-check automatically before every merge (prepare-commit-msg)",
+    )
+    igh.set_defaults(func=cmd_install_git_hook)
+
+    ugh = sub.add_parser("uninstall-git-hook", help="remove the git hook install-git-hook added")
+    ugh.set_defaults(func=cmd_uninstall_git_hook)
 
     mc = sub.add_parser(
         "merge-check", help="validate this branch against its target before merging"

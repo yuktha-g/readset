@@ -67,7 +67,15 @@ def merge_check(
     if not (root / ".git").exists():
         raise GitError(f"{root} is not a git repository")
     base = _git(root, "merge-base", "HEAD", into)
-    ours = set(_git(root, "diff", "--name-only", base).splitlines())
+    live = _merge_in_progress(root)
+    if live:
+        # A merge is already applying `into` into the working tree and index (this is the
+        # pre-merge-commit hook case): the working tree now mixes both sides, so it cannot
+        # be trusted as "ours". Use the committed HEAD instead, which the merge has not
+        # touched yet.
+        ours = set(_git(root, "diff", "--name-only", base, "HEAD").splitlines())
+    else:
+        ours = set(_git(root, "diff", "--name-only", base).splitlines())
     theirs = set(_git(root, "diff", "--name-only", base, into).splitlines())
     observed = _observed_paths(root)
 
@@ -76,7 +84,7 @@ def merge_check(
         if path in ours:
             base_text = _show(root, base, path)
             their_text = _show(root, into, path)
-            our_text = _read_working(root, path)
+            our_text = _show(root, "HEAD", path) if live else _read_working(root, path)
             our_ranges = changed_ranges(base_text, our_text)
             their_ranges = changed_ranges(base_text, their_text)
             clash = any(overlaps(t, o, margin=margin) for t in their_ranges for o in our_ranges)
@@ -103,6 +111,18 @@ def merge_check(
                 )
             )
     return MergeReport(into=into, base=base, findings=findings)
+
+
+def _merge_in_progress(root: Path) -> bool:
+    """True if this checkout is in the middle of a `git merge` (MERGE_HEAD exists)."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "-q", "MERGE_HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
 
 
 def default_target(root: Path) -> str:

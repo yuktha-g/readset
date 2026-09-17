@@ -342,6 +342,15 @@ usage errors. Library entry point: `readset.merge.merge_check(root, into) -> Mer
    - otherwise ignored.
 6. Report per path with kind, both ranges, and their diff (capped by `diff_max_lines`).
 
+**Working tree vs HEAD.** Normally "ours" is the working tree diffed against `base`, so
+uncommitted local edits count. But `git merge` applies non-conflicting changes to the
+working tree and index *before* invoking `pre-merge-commit` - by that point the tree already
+mixes both sides. `merge_check` detects an in-progress merge (`MERGE_HEAD` exists) and reads
+`HEAD` instead of the working tree in that case, since HEAD has not moved yet and is the
+only trustworthy source of "ours" during the hook. Found via a real false-positive overlap
+while building the `pre-merge-commit` hook: a disjoint edit was reported as overlapping
+because the working tree, mid-merge, already contained the other side's change too.
+
 **Why the base snapshot is the read snapshot.** A worktree created from `base` observed
 every file at `base`; that is exactly a read set with `base` as the content. The ledger adds
 the files the agent actually looked at, which is what makes the stale-dependency notice possible.

@@ -182,3 +182,53 @@ def test_should_emit_json_when_log_json_requested(
     assert main(["log", "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
     assert data[0]["path"] == "a.py" and data[0]["kind"] == "stale_read"
+
+
+def test_should_install_and_uninstall_git_hook_via_cli(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    monkeypatch.chdir(repo)
+    assert main(["install-git-hook"]) == 0
+    out = capsys.readouterr().out
+    assert "installed" in out
+    hook = repo / ".git" / "hooks" / "prepare-commit-msg"
+    assert hook.exists()
+    assert main(["install-git-hook"]) == 0
+    assert "already installed" in capsys.readouterr().out
+    assert main(["uninstall-git-hook"]) == 0
+    assert "hook removed" in capsys.readouterr().out
+    assert not hook.exists()
+    assert main(["uninstall-git-hook"]) == 0
+    assert "no readset git hook found" in capsys.readouterr().out
+
+
+def test_should_report_error_when_git_hook_install_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert main(["install-git-hook"]) == 1
+    assert "not installed" in capsys.readouterr().err
+
+
+def test_should_include_all_subcommands_in_help(capsys: pytest.CaptureFixture[str]) -> None:
+    main([])
+    out = capsys.readouterr().out
+    for command in (
+        "init",
+        "uninstall",
+        "status",
+        "log",
+        "gc",
+        "merge-check",
+        "install-git-hook",
+        "uninstall-git-hook",
+        "doctor",
+        "demo",
+        "hook",
+    ):
+        assert command in out, f"{command!r} missing from --help output"
