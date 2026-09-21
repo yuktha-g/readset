@@ -11,8 +11,9 @@ jobs:
         shell: bash
         run: |
           set -e
-          git config user.name t
-          git config user.email t@t
+          git config --global user.name t
+          git config --global user.email t@t
+          git config --global init.defaultBranch main
           rm -rf /tmp/scenario.git /tmp/scenario_ci
           git init -q --bare -b main /tmp/scenario.git
           git clone -q /tmp/scenario.git /tmp/seed
@@ -58,8 +59,9 @@ jobs:
         shell: bash
         run: |
           set -e
-          git config user.name t
-          git config user.email t@t
+          git config --global user.name t
+          git config --global user.email t@t
+          git config --global init.defaultBranch main
           rm -rf /tmp/scenario2.git /tmp/scenario2_ci
           git init -q --bare -b main /tmp/scenario2.git
           git clone -q /tmp/scenario2.git /tmp/seed2
