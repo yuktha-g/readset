@@ -61,7 +61,7 @@ create table if not exists conflict_log (
 );
 """
 
-BUSY_TIMEOUT_MS = 2000
+BUSY_TIMEOUT_MS = 15000
 
 
 @dataclass(frozen=True)
@@ -111,10 +111,17 @@ class Ledger:
         Used as `with ledger.connect() as conn:` the block commits on success. Note that
         sqlite3's context manager commits but does not close; short-lived processes make
         that acceptable, and long-lived callers should close explicitly.
+
+        `synchronous = NORMAL` is set alongside WAL (the pairing SQLite's own docs
+        recommend): it shortens how long a writer holds the lock, which matters more
+        under real contention than a longer busy_timeout alone. The ledger is local
+        conflict-detection metadata, not the source of truth for any code, so losing the
+        last unsynced write on an OS crash is an acceptable trade for that.
         """
         conn = sqlite3.connect(self.db_path, timeout=BUSY_TIMEOUT_MS / 1000, isolation_level=None)
         conn.row_factory = sqlite3.Row
         conn.execute("pragma journal_mode = wal")
+        conn.execute("pragma synchronous = normal")
         conn.execute(f"pragma busy_timeout = {BUSY_TIMEOUT_MS}")
         conn.isolation_level = "DEFERRED"
         return conn
