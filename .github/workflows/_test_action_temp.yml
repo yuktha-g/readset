@@ -21,19 +21,11 @@ jobs:
           git add -A && git commit -qm base
           git push -q origin main
           git checkout -qb pr-feature
-          python3 -c "
-import pathlib
-p = pathlib.Path('f.py')
-p.write_text(p.read_text().replace('line9\n', 'nine\n'))
-"
+          python3 -c "import pathlib; p = pathlib.Path('f.py'); p.write_text(p.read_text().replace('line9\n', 'nine\n'))"
           git commit -qam "pr edits line 9"
           git push -q origin pr-feature
           git checkout -q main
-          python3 -c "
-import pathlib
-p = pathlib.Path('f.py')
-p.write_text(p.read_text().replace('line8\n', 'EIGHT\n'))
-"
+          python3 -c "import pathlib; p = pathlib.Path('f.py'); p.write_text(p.read_text().replace('line8\n', 'EIGHT\n'))"
           git commit -qam "main edits line 8"
           git push -q origin main
           git clone -q /tmp/scenario.git /tmp/scenario_ci
@@ -76,11 +68,7 @@ p.write_text(p.read_text().replace('line8\n', 'EIGHT\n'))
           git add -A && git commit -qm base
           git push -q origin main
           git checkout -qb pr-feature
-          python3 -c "
-import pathlib
-p = pathlib.Path('f.py')
-p.write_text(p.read_text().replace('line9\n', 'nine\n'))
-"
+          python3 -c "import pathlib; p = pathlib.Path('f.py'); p.write_text(p.read_text().replace('line9\n', 'nine\n'))"
           git commit -qam "pr edits line 9 only"
           git push -q origin pr-feature
           git clone -q /tmp/scenario2.git /tmp/scenario2_ci

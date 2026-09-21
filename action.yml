@@ -71,12 +71,13 @@ runs:
         echo "::group::readset merge-check (human-readable)"
         readset merge-check --into "$RS_INTO" --margin "$RS_MARGIN" $( [ "$RS_STRICT" = "true" ] && echo --strict ) --verbose || true
         echo "::endgroup::"
-        python3 -c "
-import json, sys
-report = json.load(open('readset-report.json'))
-blocking = [f for f in report['findings'] if f['blocking']]
-if blocking:
-    for f in blocking:
-        print(f\"::error file={f['path']}::readset: blocked, {f['kind']} - run 'readset merge-check --into {report['into']}' locally for the diff\")
-    sys.exit(1)
-"
+        python3 - <<'PYEOF'
+        import json, sys
+        report = json.load(open("readset-report.json"))
+        blocking = [f for f in report["findings"] if f["blocking"]]
+        if blocking:
+            for f in blocking:
+                msg = "readset: blocked, " + f["kind"] + " - run 'readset merge-check --into " + report["into"] + "' locally for the diff"
+                print("::error file=" + f["path"] + "::" + msg)
+            sys.exit(1)
+        PYEOF
