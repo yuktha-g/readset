@@ -1,0 +1,82 @@
+name: readset merge-check
+description: >-
+  Block a pull request from merging when it edits within a few lines of a change the
+  target branch made since the two diverged, or relies on a file the target branch
+  changed that this branch only read. Catches what git's own merge would silently allow.
+author: Yuktha G
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  into:
+    description: >-
+      The revision this branch is being checked against, usually
+      origin/<base-branch>. Must already be fetched (see the example workflow in the
+      README) - this action does not fetch it for you, since how you fetch depends on
+      your checkout step.
+    required: true
+  strict:
+    description: >-
+      "true" to also block when this branch only read (never wrote) a file the target
+      changed. Off by default: those cases are reported, not blocked.
+    required: false
+    default: "false"
+  margin:
+    description: Lines of separation required between two independent edits to not conflict.
+    required: false
+    default: "3"
+  version:
+    description: readset version to install (PyPI version spec, e.g. "0.1.0" or "==0.1.0").
+    required: false
+    default: ""
+
+outputs:
+  ok:
+    description: "\"true\" if the check passed, \"false\" if it found a blocking conflict."
+    value: ${{ steps.check.outputs.ok }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+
+    - name: Install readset
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.version }}" ]; then
+          uv tool install "readset==${{ inputs.version }}"
+        else
+          uv tool install readset
+        fi
+
+    - name: Run merge-check
+      id: check
+      shell: bash
+      env:
+        RS_INTO: ${{ inputs.into }}
+        RS_STRICT: ${{ inputs.strict }}
+        RS_MARGIN: ${{ inputs.margin }}
+      run: |
+        args=(--into "$RS_INTO" --margin "$RS_MARGIN" --json)
+        if [ "$RS_STRICT" = "true" ]; then
+          args+=(--strict)
+        fi
+        if readset merge-check "${args[@]}" > readset-report.json; then
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+        fi
+        echo "::group::readset merge-check (human-readable)"
+        readset merge-check --into "$RS_INTO" --margin "$RS_MARGIN" $( [ "$RS_STRICT" = "true" ] && echo --strict ) --verbose || true
+        echo "::endgroup::"
+        python3 -c "
+import json, sys
+report = json.load(open('readset-report.json'))
+blocking = [f for f in report['findings'] if f['blocking']]
+if blocking:
+    for f in blocking:
+        print(f\"::error file={f['path']}::readset: blocked, {f['kind']} - run 'readset merge-check --into {report['into']}' locally for the diff\")
+    sys.exit(1)
+"

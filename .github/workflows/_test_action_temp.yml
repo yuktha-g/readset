@@ -1,0 +1,104 @@
+name: temp-test-merge-check-action
+on: [workflow_dispatch]
+jobs:
+  overlap-should-block:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build a throwaway diverging-branch scenario in the workspace
+        shell: bash
+        run: |
+          set -e
+          git config user.name t
+          git config user.email t@t
+          rm -rf /tmp/scenario.git /tmp/scenario_ci
+          git init -q --bare -b main /tmp/scenario.git
+          git clone -q /tmp/scenario.git /tmp/seed
+          cd /tmp/seed
+          python3 -c "print(''.join(f'line{i}\n' for i in range(1,11)))" > f.py
+          git add -A && git commit -qm base
+          git push -q origin main
+          git checkout -qb pr-feature
+          python3 -c "
+import pathlib
+p = pathlib.Path('f.py')
+p.write_text(p.read_text().replace('line9\n', 'nine\n'))
+"
+          git commit -qam "pr edits line 9"
+          git push -q origin pr-feature
+          git checkout -q main
+          python3 -c "
+import pathlib
+p = pathlib.Path('f.py')
+p.write_text(p.read_text().replace('line8\n', 'EIGHT\n'))
+"
+          git commit -qam "main edits line 8"
+          git push -q origin main
+          git clone -q /tmp/scenario.git /tmp/scenario_ci
+          cd /tmp/scenario_ci
+          git checkout -q pr-feature
+          git fetch -q origin main
+      - name: Run readset action against the throwaway scenario
+        id: rs
+        uses: ./
+        with:
+          into: origin/main
+      - name: Assert it correctly reported not-ok
+        shell: bash
+        run: |
+          echo "action output ok=${{ steps.rs.outputs.ok }}"
+          if [ "${{ steps.rs.outputs.ok }}" != "false" ]; then
+            echo "FAIL: expected ok=false (a real overlap should block)"
+            exit 1
+          fi
+          echo "PASS: correctly reported ok=false"
+        working-directory: /tmp/scenario_ci
+
+  clean-should-pass:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build a throwaway clean scenario
+        shell: bash
+        run: |
+          set -e
+          git config user.name t
+          git config user.email t@t
+          rm -rf /tmp/scenario2.git /tmp/scenario2_ci
+          git init -q --bare -b main /tmp/scenario2.git
+          git clone -q /tmp/scenario2.git /tmp/seed2
+          cd /tmp/seed2
+          python3 -c "print(''.join(f'line{i}\n' for i in range(1,11)))" > f.py
+          git add -A && git commit -qm base
+          git push -q origin main
+          git checkout -qb pr-feature
+          python3 -c "
+import pathlib
+p = pathlib.Path('f.py')
+p.write_text(p.read_text().replace('line9\n', 'nine\n'))
+"
+          git commit -qam "pr edits line 9 only"
+          git push -q origin pr-feature
+          git clone -q /tmp/scenario2.git /tmp/scenario2_ci
+          cd /tmp/scenario2_ci
+          git checkout -q pr-feature
+          git fetch -q origin main
+      - name: Run readset action against the clean scenario
+        id: rs
+        uses: ./
+        with:
+          into: origin/main
+      - name: Assert it correctly reported ok
+        shell: bash
+        run: |
+          echo "action output ok=${{ steps.rs.outputs.ok }}"
+          if [ "${{ steps.rs.outputs.ok }}" != "true" ]; then
+            echo "FAIL: expected ok=true (no real conflict here)"
+            exit 1
+          fi
+          echo "PASS: correctly reported ok=true"
+        working-directory: /tmp/scenario2_ci
