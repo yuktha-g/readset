@@ -1,0 +1,21 @@
+# Copy this job into your project's .gitlab-ci.yml (or `include:` this file) to block
+# a merge request when it edits within a few lines of a change the target branch made
+# since the branches diverged, or when it depends on a file the target branch changed.
+#
+# Not live-tested against a real GitLab runner (this repo only has GitHub CI access) -
+# it follows GitLab's documented merge-request pipeline variables and GIT_DEPTH setting.
+# If you hit a mismatch, please open an issue with the job log.
+
+readset-merge-check:
+  image: python:3.12-slim
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  variables:
+    GIT_DEPTH: "0"          # full history: merge-base needs a real common ancestor
+  before_script:
+    - pip install --quiet uv
+    - export PATH="$HOME/.local/bin:$PATH"
+    - uv tool install readset
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+  script:
+    - readset merge-check --into "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --verbose

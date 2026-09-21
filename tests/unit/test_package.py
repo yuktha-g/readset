@@ -7,7 +7,7 @@ from readset._term import paint
 
 
 def test_should_expose_version_when_imported() -> None:
-    assert readset.__version__ == "0.1.0"
+    assert readset.__version__ == "0.2.0"
 
 
 def test_should_not_colour_when_no_color_is_set(monkeypatch: pytest.MonkeyPatch) -> None:

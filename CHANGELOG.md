@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-21
+
+### Added
+
+- A GitHub composite Action (`action.yml`) that runs `merge-check` as a required PR check:
+  `uses: yuktha-g/readset@v0.2.0`. Distinguishes a real conflict (exit 1, blocks the PR
+  with the diff) from a tool error such as an unresolvable target ref (exit 2, fails the
+  step with a clear message instead of a JSON-parse crash). Verified end to end against a
+  real GitHub Actions runner: a trivially-clean check reporting `ok=true`, and an
+  unresolvable ref correctly failing the step - see `.github/workflows/readset.yml`, which
+  runs this action on readset's own PRs.
+- A documented GitLab CI job template (`docs/ci/gitlab-ci.yml`) for the same check on merge
+  requests. Not live-tested against a real GitLab runner.
+
 ## [0.1.0] - 2026-09-15
 
 ### Added

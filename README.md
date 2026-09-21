@@ -11,6 +11,51 @@ overwriting each other, by validating every write against what the agent actuall
 
 Zero dependencies. No daemon. One command to install. Works with Claude Code today; Codex CLI adapter included.
 
+## For a team: a required check on every PR or MR
+
+The version of this problem that actually costs a company something isn't one developer's
+two terminals - it's many agents (local, cloud, human, doesn't matter) each on their own
+branch, opening pull requests against the same repo. Even Anthropic's own cloud product
+(Claude Code Projects) resolves that collision with a plain `git merge` - if two branches
+touch nearby lines without git itself flagging a textual conflict, nothing catches it.
+
+Add this to a GitHub repo and every PR gets checked automatically, no local install required
+for anyone:
+
+```yaml
+# .github/workflows/readset.yml
+name: readset
+on:
+  pull_request:
+
+jobs:
+  merge-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: git fetch origin ${{ github.base_ref }}
+      - uses: yuktha-g/readset@v0.2.0
+        with:
+          into: origin/${{ github.base_ref }}
+```
+
+`fetch-depth: 0` and the explicit fetch matter: `merge-base` needs real history, and a
+default shallow checkout won't have it. The action fails the job with the exact overlapping
+diff when it finds a real conflict, so it shows up as a red check on the PR, the same way a
+failing test would - nobody has to remember to run anything.
+
+For GitLab, see [`docs/ci/gitlab-ci.yml`](docs/ci/gitlab-ci.yml) for the equivalent job
+(GitLab's documented merge-request pipeline variables; not live-tested against a real
+GitLab runner, unlike the GitHub Action which is verified end to end in this repo's own
+CI - see `.github/workflows/readset.yml`).
+
+This CI check only catches the "both branches changed nearby lines" case (the most valuable
+one, and the one git itself misses) - the stale-dependency check needs a live agent session's
+read history, so it only applies to local use, covered next.
+
 ## The problem
 
 You have two Claude Code terminals open on the same repo, or one session that fans out

@@ -11,7 +11,7 @@ from readset.errors import (
 from readset.ledger import GcReport, Ledger, TxnInfo
 from readset.txn import Conflict, Ok, Result, Transaction
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Conflict",
