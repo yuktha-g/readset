@@ -258,10 +258,10 @@ def cmd_doctor(_: argparse.Namespace) -> int:
             path = settings_file(agent, root, user=user)
             if _hooks_present(path):
                 found.append(f"{agent}: {path}")
-    if plugin:
-        line("hooks (claude)", True, "installed via the readset plugin")
-    elif any(f.startswith("claude") for f in found):
-        line("hooks (claude)", True, next(f for f in found if f.startswith("claude")))
+    claude_found = [f for f in found if f.startswith("claude")]
+    sources = (["the readset plugin"] if plugin else []) + claude_found
+    if sources:
+        line("hooks (claude)", True, ", ".join(sources))
     else:
         line(
             "hooks (claude)",

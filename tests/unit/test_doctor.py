@@ -67,3 +67,23 @@ def test_should_detect_plugin_hooks_when_plugin_installed(
     Ledger.open(repo)
     assert main(["doctor"]) == 0
     assert "plugin" in capsys.readouterr().out
+
+
+def test_should_report_both_sources_when_plugin_and_repo_hooks_both_present(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Regression: a real repo can have both the globally installed plugin AND a per-repo
+    # `readset init` install active at once. doctor used to report only the plugin and
+    # silently skip checking the repo's own .claude/settings.json in that case.
+    home = tmp_path / "home"
+    plugins = home / ".claude" / "plugins" / "installed_plugins.json"
+    plugins.parent.mkdir(parents=True)
+    plugins.write_text(json.dumps({"plugins": {"readset@readset": [{"scope": "user"}]}}))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(repo)
+    main(["init"])
+    out = capsys.readouterr()
+    assert main(["doctor"]) == 0
+    out = capsys.readouterr().out
+    assert "the readset plugin" in out
+    assert str(repo / ".claude" / "settings.json") in out

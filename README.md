@@ -4,7 +4,7 @@
 [![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/yuktha-g/readset/blob/main/pyproject.toml)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](https://github.com/yuktha-g/readset/blob/main/pyproject.toml)
 [![typed](https://img.shields.io/badge/mypy-strict-blue)](https://github.com/yuktha-g/readset/blob/main/pyproject.toml)
-[![licence](https://img.shields.io/badge/licence-MIT-lightgrey)](LICENSE)
+[![licence](https://img.shields.io/badge/licence-MIT-lightgrey)](https://github.com/yuktha-g/readset/blob/main/LICENSE)
 
 **Snapshot isolation for AI agents.** readset stops parallel coding agents from silently
 overwriting each other, by validating every write against what the agent actually read.
@@ -29,7 +29,7 @@ on top of a version it never saw.
 
 ## What it looks like
 
-![readset demo: agent-a is blocked with a diff after agent-b changed the file, re-reads, and succeeds](docs/assets/demo.svg)
+![readset demo: agent-a is blocked with a diff after agent-b changed the file, re-reads, and succeeds](https://raw.githubusercontent.com/yuktha-g/readset/main/docs/assets/demo.svg)
 
 ```
 $ readset demo
