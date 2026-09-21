@@ -63,14 +63,27 @@ runs:
         if [ "$RS_STRICT" = "true" ]; then
           args+=(--strict)
         fi
-        if readset merge-check "${args[@]}" > readset-report.json; then
+
+        set +e
+        readset merge-check "${args[@]}" > readset-report.json 2> readset-report.stderr
+        rc=$?
+        set -e
+
+        echo "::group::readset merge-check (human-readable)"
+        readset merge-check --into "$RS_INTO" --margin "$RS_MARGIN" $( [ "$RS_STRICT" = "true" ] && echo --strict ) --verbose || true
+        echo "::endgroup::"
+
+        if [ "$rc" -eq 2 ]; then
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+          echo "::error::readset merge-check could not run: $(cat readset-report.stderr)"
+          exit 1
+        fi
+        if [ "$rc" -eq 0 ]; then
           echo "ok=true" >> "$GITHUB_OUTPUT"
         else
           echo "ok=false" >> "$GITHUB_OUTPUT"
         fi
-        echo "::group::readset merge-check (human-readable)"
-        readset merge-check --into "$RS_INTO" --margin "$RS_MARGIN" $( [ "$RS_STRICT" = "true" ] && echo --strict ) --verbose || true
-        echo "::endgroup::"
+
         python3 - <<'PYEOF'
         import json, sys
         report = json.load(open("readset-report.json"))
